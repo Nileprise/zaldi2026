@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Main Logistics Truck Body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M27,38 h32 v26 h-32 z" />
+    <!-- Truck Cabin -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M59,44 h14 l6,8 v12 h-20 z" />
+    <!-- Cabin Window -->
+    <path
+        android:fillColor="#D96B00"
+        android:pathData="M62,47 h9 l4,5 h-13 z" />
+    <!-- Express Motion Slash on Cargo Box -->
+    <path
+        android:fillColor="#D96B00"
+        android:pathData="M35,43 h6 l-5,16 h-6 z" />
+    <path
+        android:fillColor="#D96B00"
+        android:pathData="M45,43 h6 l-5,16 h-6 z" />
+    <!-- Wheels -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M37,65 m -6,0 a 6,6 0 1,0 12,0 a 6,6 0 1,0 -12,0" />
+    <path
+        android:fillColor="#111216"
+        android:pathData="M37,65 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M69,65 m -6,0 a 6,6 0 1,0 12,0 a 6,6 0 1,0 -12,0" />
+    <path
+        android:fillColor="#111216"
+        android:pathData="M69,65 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0" />
+    <!-- Speed Lines Behind -->
+    <path
+        android:fillColor="#FFF4ED"
+        android:pathData="M22,46 h3 v2 h-3 z" />
+    <path
+        android:fillColor="#FFF4ED"
+        android:pathData="M18,52 h6 v2 h-6 z" />
+    <path
+        android:fillColor="#FFF4ED"
+        android:pathData="M21,58 h4 v2 h-4 z" />
+</vector>

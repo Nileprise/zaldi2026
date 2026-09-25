@@ -1,0 +1,8 @@
+{
+  "name": "Remix Akhil Logistics",
+  "description": "Intra-city logistics and freight platform for on-demand goods transport, live fleet tracking, and driver management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

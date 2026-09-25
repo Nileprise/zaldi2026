@@ -1,12 +1,295 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Zaldi</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zaldi 2026 - Kotlin App</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    header {
+      background: rgba(255, 255, 255, 0.95);
+      padding: 40px 20px;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      margin-bottom: 40px;
+      text-align: center;
+    }
+    
+    h1 {
+      font-size: 3em;
+      color: #667eea;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .subtitle {
+      font-size: 1.2em;
+      color: #764ba2;
+      margin-bottom: 20px;
+    }
+    
+    .tagline {
+      font-size: 0.95em;
+      color: #666;
+      font-style: italic;
+    }
+    
+    .content {
+      background: white;
+      padding: 40px;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      margin-bottom: 30px;
+    }
+    
+    section {
+      margin-bottom: 40px;
+    }
+    
+    h2 {
+      font-size: 1.8em;
+      color: #667eea;
+      margin-bottom: 20px;
+      border-bottom: 3px solid #764ba2;
+      padding-bottom: 10px;
+    }
+    
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    
+    .feature-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      transition: transform 0.3s ease;
+    }
+    
+    .feature-card:hover {
+      transform: translateY(-5px);
+    }
+    
+    .feature-card h3 {
+      margin-bottom: 10px;
+      font-size: 1.3em;
+    }
+    
+    .feature-card p {
+      font-size: 0.95em;
+      opacity: 0.9;
+    }
+    
+    .tech-stack {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+    
+    .tech-list {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+    
+    .tech-list li {
+      background: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      border-left: 3px solid #764ba2;
+      font-weight: 500;
+    }
+    
+    .cta-buttons {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-top: 30px;
+    }
+    
+    .btn {
+      padding: 12px 30px;
+      border-radius: 5px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      border: none;
+      cursor: pointer;
+      font-size: 1em;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      transform: scale(1.05);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+    
+    .btn-secondary:hover {
+      background: #667eea;
+      color: white;
+    }
+    
+    footer {
+      background: rgba(255, 255, 255, 0.95);
+      padding: 30px 20px;
+      border-radius: 10px;
+      text-align: center;
+      color: #666;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+    
+    footer p {
+      margin: 10px 0;
+    }
+    
+    .social-links {
+      margin-top: 15px;
+    }
+    
+    .social-links a {
+      display: inline-block;
+      margin: 0 10px;
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      transition: color 0.3s ease;
+    }
+    
+    .social-links a:hover {
+      color: #764ba2;
+    }
+    
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 2em;
+      }
+      
+      h2 {
+        font-size: 1.5em;
+      }
+      
+      .cta-buttons {
+        flex-direction: column;
+      }
+      
+      .btn {
+        width: 100%;
+        text-align: center;
+      }
+    }
+  </style>
 </head>
 <body>
-  <h1>Zaldi</h1>
-  <p>Welcome to Zaldi.</p>
+  <div class="container">
+    <header>
+      <h1>🚀 Zaldi 2026</h1>
+      <p class="subtitle">A Modern Kotlin Application</p>
+      <p class="tagline">Build amazing things with Kotlin</p>
+    </header>
+    
+    <div class="content">
+      <section id="about">
+        <h2>About Zaldi</h2>
+        <p>Zaldi 2026 is a cutting-edge Kotlin application designed to deliver powerful functionality with clean, maintainable code. Built with modern development practices and best practices in mind, Zaldi brings innovation to your workflow.</p>
+      </section>
+      
+      <section id="features">
+        <h2>Features</h2>
+        <div class="features">
+          <div class="feature-card">
+            <h3>⚡ High Performance</h3>
+            <p>Optimized for speed and efficiency, ensuring your app runs smoothly.</p>
+          </div>
+          <div class="feature-card">
+            <h3>🔒 Secure</h3>
+            <p>Built with security best practices to protect your data and privacy.</p>
+          </div>
+          <div class="feature-card">
+            <h3>🎯 User-Friendly</h3>
+            <p>Intuitive interface designed for the best user experience.</p>
+          </div>
+          <div class="feature-card">
+            <h3>📱 Cross-Platform</h3>
+            <p>Works seamlessly across different platforms and devices.</p>
+          </div>
+        </div>
+      </section>
+      
+      <section id="tech-stack">
+        <h2>Technology Stack</h2>
+        <div class="tech-stack">
+          <p>Built with modern technologies and frameworks:</p>
+          <ul class="tech-list">
+            <li>Kotlin</li>
+            <li>Gradle</li>
+            <li>Firebase</li>
+            <li>Modern Libraries</li>
+          </ul>
+        </div>
+      </section>
+      
+      <section id="getting-started">
+        <h2>Getting Started</h2>
+        <p>Ready to get started with Zaldi? Follow these steps:</p>
+        <ol style="margin-top: 15px; margin-left: 20px;">
+          <li style="margin: 10px 0;">Clone the repository from GitHub</li>
+          <li style="margin: 10px 0;">Install dependencies using Gradle</li>
+          <li style="margin: 10px 0;">Configure your environment variables</li>
+          <li style="margin: 10px 0;">Build and run the application</li>
+        </ol>
+        
+        <div class="cta-buttons">
+          <a href="https://github.com/Nileprise/zaldi2026" class="btn btn-primary">View on GitHub</a>
+          <a href="https://github.com/Nileprise/zaldi2026#readme" class="btn btn-secondary">Read Documentation</a>
+        </div>
+      </section>
+    </div>
+    
+    <footer>
+      <p><strong>Zaldi 2026</strong> - A Kotlin Application by Nileprise</p>
+      <p>Made with ❤️ for developers</p>
+      <div class="social-links">
+        <a href="https://github.com/Nileprise/zaldi2026">GitHub</a>
+        <a href="https://github.com/Nileprise">Creator</a>
+      </div>
+      <p style="margin-top: 20px; font-size: 0.9em; color: #999;">&copy; 2026 All rights reserved.</p>
+    </footer>
+  </div>
 </body>
 </html>

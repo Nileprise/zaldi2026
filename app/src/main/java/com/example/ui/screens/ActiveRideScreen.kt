@@ -250,8 +250,13 @@ fun ActiveRideScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(230.dp),
+                    pickupLatLng = com.google.android.gms.maps.model.LatLng(order.pickupLat, order.pickupLng),
+                    dropoffLatLng = com.google.android.gms.maps.model.LatLng(order.dropoffLat, order.dropoffLng),
                     pickupTitle = order.pickupAddress,
                     dropoffTitle = order.dropoffAddress,
+                    pickupPlaceId = order.pickupPlaceId,
+                    dropoffPlaceId = order.dropoffPlaceId,
+                    vehicleType = order.vehicleTierId,
                     isInteractive = true
                 )
             } else {

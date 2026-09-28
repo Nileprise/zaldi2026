@@ -10,11 +10,17 @@ import com.example.data.model.DriverKyc
 import com.example.data.model.DriverLocationData
 import com.example.data.model.UserRole
 import com.example.data.model.VehicleCatalog
+import com.example.data.model.VehicleTier
 import com.example.data.repository.LogisticsRepository
 import com.example.service.LocationManager
 import com.example.util.DeliveryNotificationHelper
+import com.example.util.DirectionsResult
 import com.example.util.DistanceCalculator
+import com.example.util.GoogleMapsRoutingService
+import com.example.util.PlaceModel
 import com.example.util.RouteDistanceInfo
+import com.example.util.RoutingProfile
+import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +29,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import kotlin.random.Random
+
+sealed class BookingValidationResult {
+    object Valid : BookingValidationResult()
+    data class Invalid(
+        val message: String,
+        val isPickupError: Boolean = false,
+        val isDropoffError: Boolean = false
+    ) : BookingValidationResult()
+}
 
 class LogisticsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -38,7 +53,7 @@ class LogisticsViewModel(application: Application) : AndroidViewModel(applicatio
     val currentRole: StateFlow<UserRole> = _currentRole.asStateFlow()
 
     // Auth state
-    private val _isLoggedIn = MutableStateFlow(true) // Starts logged in for seamless demo/preview
+    private val _isLoggedIn = MutableStateFlow(true)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
     private val _userPhone = MutableStateFlow("9999999999")
@@ -47,54 +62,45 @@ class LogisticsViewModel(application: Application) : AndroidViewModel(applicatio
     private val _userName = MutableStateFlow("Akhil Sharma")
     val userName: StateFlow<String> = _userName.asStateFlow()
 
-    // Booking input fields
-    private val _pickupAddress = MutableStateFlow("Indiranagar 100ft Rd, Bengaluru")
+    // Place Models & Geocoding State
+    private val _pickupPlace = MutableStateFlow(GoogleMapsRoutingService.placeCatalog[0]) // Indiranagar
+    val pickupPlace: StateFlow<PlaceModel> = _pickupPlace.asStateFlow()
+
+    private val _dropoffPlace = MutableStateFlow(GoogleMapsRoutingService.placeCatalog[1]) // Koramangala
+    val dropoffPlace: StateFlow<PlaceModel> = _dropoffPlace.asStateFlow()
+
+    // String address states
+    private val _pickupAddress = MutableStateFlow(_pickupPlace.value.name)
     val pickupAddress: StateFlow<String> = _pickupAddress.asStateFlow()
 
-    private val _dropoffAddress = MutableStateFlow("Koramangala 4th Block, Bengaluru")
+    private val _dropoffAddress = MutableStateFlow(_dropoffPlace.value.name)
     val dropoffAddress: StateFlow<String> = _dropoffAddress.asStateFlow()
 
-    // Exact calculated distance and route information
+    // Vehicle Tier state
+    private val _selectedVehicleId = MutableStateFlow("tata")
+    val selectedVehicleId: StateFlow<String> = _selectedVehicleId.asStateFlow()
+
+    // Mode-specific Directions & Routing Result (Directions API & Distance Matrix)
+    private val _directionsResult = MutableStateFlow(
+        GoogleMapsRoutingService.calculateDirections(
+            pickup = _pickupPlace.value,
+            dropoff = _dropoffPlace.value,
+            profile = RoutingProfile.TATA_ACE_COMMERCIAL
+        )
+    )
+    val directionsResult: StateFlow<DirectionsResult> = _directionsResult.asStateFlow()
+
+    // Distance calculation compatibility
     private var _customDistanceKm: Double? = null
     private val _routeDistanceInfo = MutableStateFlow(
-        DistanceCalculator.calculateExactDistance(
-            _pickupAddress.value,
-            _dropoffAddress.value
+        RouteDistanceInfo(
+            distanceKm = _directionsResult.value.actualRoadKm,
+            estimatedDurationMinutes = _directionsResult.value.etaMinutes,
+            viaRoad = _directionsResult.value.viaRoad,
+            routeSummary = _directionsResult.value.routeSummary
         )
     )
     val routeDistanceInfo: StateFlow<RouteDistanceInfo> = _routeDistanceInfo.asStateFlow()
-
-    private fun updateCalculatedDistance() {
-        val custom = _customDistanceKm
-        if (custom != null) {
-            val estMin = DistanceCalculator.calculateEstimatedMinutes(custom)
-            _routeDistanceInfo.value = RouteDistanceInfo(
-                distanceKm = custom,
-                estimatedDurationMinutes = estMin,
-                viaRoad = "Adjusted Exact Corridor ($custom km)",
-                routeSummary = "$custom km • ~$estMin mins"
-            )
-        } else {
-            _routeDistanceInfo.value = DistanceCalculator.calculateExactDistance(
-                _pickupAddress.value,
-                _dropoffAddress.value
-            )
-        }
-    }
-
-    fun setCustomDistance(km: Double) {
-        val clamped = (kotlin.math.max(1.0, km) * 10.0).roundToInt() / 10.0
-        _customDistanceKm = clamped
-        updateCalculatedDistance()
-    }
-
-    fun resetDistanceToAuto() {
-        _customDistanceKm = null
-        updateCalculatedDistance()
-    }
-
-    private val _selectedVehicleId = MutableStateFlow("tata")
-    val selectedVehicleId: StateFlow<String> = _selectedVehicleId.asStateFlow()
 
     private val _selectedGoodsType = MutableStateFlow("Electronics & Gadgets")
     val selectedGoodsType: StateFlow<String> = _selectedGoodsType.asStateFlow()
@@ -124,9 +130,13 @@ class LogisticsViewModel(application: Application) : AndroidViewModel(applicatio
     private val _driverIncomingRequest = MutableStateFlow<BookingOrder?>(null)
     val driverIncomingRequest: StateFlow<BookingOrder?> = _driverIncomingRequest.asStateFlow()
 
-    // Admin pricing multiplier (Dynamic pricing engine)
+    // Dynamic pricing multiplier
     private val _pricingMultiplier = MutableStateFlow(1.0f)
     val pricingMultiplier: StateFlow<Float> = _pricingMultiplier.asStateFlow()
+
+    // Validation State
+    private val _validationState = MutableStateFlow<BookingValidationResult>(BookingValidationResult.Valid)
+    val validationState: StateFlow<BookingValidationResult> = _validationState.asStateFlow()
 
     // Orders from DB
     val activeOrder: StateFlow<BookingOrder?> = repository.activeOrder
@@ -164,6 +174,45 @@ class LogisticsViewModel(application: Application) : AndroidViewModel(applicatio
             initialValue = emptyList()
         )
 
+    private fun currentRoutingProfile(): RoutingProfile {
+        val tier = VehicleCatalog.tiers.find { it.id == _selectedVehicleId.value } ?: VehicleCatalog.tiers[2]
+        return tier.routingProfile
+    }
+
+    private fun recalculateDirections() {
+        val profile = currentRoutingProfile()
+        val custom = _customDistanceKm
+
+        val baseDirections = GoogleMapsRoutingService.calculateDirections(
+            pickup = _pickupPlace.value,
+            dropoff = _dropoffPlace.value,
+            profile = profile
+        )
+
+        if (custom != null) {
+            val estMin = DistanceCalculator.calculateEstimatedMinutes(custom)
+            _directionsResult.value = baseDirections.copy(
+                actualRoadKm = custom,
+                etaMinutes = estMin,
+                routeSummary = "$custom km • ~$estMin mins (${baseDirections.viaRoad})"
+            )
+            _routeDistanceInfo.value = RouteDistanceInfo(
+                distanceKm = custom,
+                estimatedDurationMinutes = estMin,
+                viaRoad = baseDirections.viaRoad,
+                routeSummary = "$custom km • ~$estMin mins"
+            )
+        } else {
+            _directionsResult.value = baseDirections
+            _routeDistanceInfo.value = RouteDistanceInfo(
+                distanceKm = baseDirections.actualRoadKm,
+                estimatedDurationMinutes = baseDirections.etaMinutes,
+                viaRoad = baseDirections.viaRoad,
+                routeSummary = baseDirections.routeSummary
+            )
+        }
+    }
+
     fun setRole(role: UserRole) {
         _currentRole.value = role
         when (role) {
@@ -192,20 +241,54 @@ class LogisticsViewModel(application: Application) : AndroidViewModel(applicatio
         _isLoggedIn.value = false
     }
 
+    /**
+     * Autocomplete Place search
+     */
+    fun searchPlaces(query: String): List<PlaceModel> {
+        return GoogleMapsRoutingService.searchPlaces(query)
+    }
+
+    /**
+     * Sets Pickup via PlaceModel (Google Maps Autocomplete / Geocoded)
+     */
+    fun setPickupPlace(place: PlaceModel) {
+        _pickupPlace.value = place
+        _pickupAddress.value = place.name
+        _customDistanceKm = null
+        _validationState.value = BookingValidationResult.Valid
+        recalculateDirections()
+    }
+
+    /**
+     * Sets Dropoff via PlaceModel (Google Maps Autocomplete / Geocoded)
+     */
+    fun setDropoffPlace(place: PlaceModel) {
+        _dropoffPlace.value = place
+        _dropoffAddress.value = place.name
+        _customDistanceKm = null
+        _validationState.value = BookingValidationResult.Valid
+        recalculateDirections()
+    }
+
     fun setPickup(address: String) {
         _pickupAddress.value = address
+        _pickupPlace.value = GoogleMapsRoutingService.geocode(address)
         _customDistanceKm = null
-        updateCalculatedDistance()
+        _validationState.value = BookingValidationResult.Valid
+        recalculateDirections()
     }
 
     fun setDropoff(address: String) {
         _dropoffAddress.value = address
+        _dropoffPlace.value = GoogleMapsRoutingService.geocode(address)
         _customDistanceKm = null
-        updateCalculatedDistance()
+        _validationState.value = BookingValidationResult.Valid
+        recalculateDirections()
     }
 
     fun setVehicle(vehicleId: String) {
         _selectedVehicleId.value = vehicleId
+        recalculateDirections() // Re-routes according to vehicle agility (2-wheeler vs 3-wheeler vs truck)
     }
 
     fun setGoodsType(type: String) {
@@ -220,31 +303,27 @@ class LogisticsViewModel(application: Application) : AndroidViewModel(applicatio
         _selectedPaymentMethod.value = method
     }
 
-    fun toggleDriverOnline(context: Context) {
-        val newState = !_isDriverOnline.value
-        _isDriverOnline.value = newState
-        if (newState) {
-            LocationManager.startLocationService(context)
-        } else {
-            LocationManager.stopLocationService(context)
-        }
+    fun setCustomDistance(km: Double) {
+        val clamped = (kotlin.math.max(1.0, km) * 10.0).roundToInt() / 10.0
+        _customDistanceKm = clamped
+        recalculateDirections()
     }
 
-    fun startLocationService(context: Context) {
-        LocationManager.startLocationService(context)
-    }
-
-    fun stopLocationService(context: Context) {
-        LocationManager.stopLocationService(context)
+    fun resetDistanceToAuto() {
+        _customDistanceKm = null
+        recalculateDirections()
     }
 
     fun setPricingMultiplier(multiplier: Float) {
         _pricingMultiplier.value = multiplier
     }
 
+    /**
+     * Calculates automatic transparent fare based on actual road KM & vehicle tier
+     */
     fun calculateEstimatedFare(
-        vehicleId: String,
-        distanceKm: Double = _routeDistanceInfo.value.distanceKm
+        vehicleId: String = _selectedVehicleId.value,
+        distanceKm: Double = _directionsResult.value.actualRoadKm
     ): Double {
         val tier = VehicleCatalog.tiers.find { it.id == vehicleId } ?: VehicleCatalog.tiers[0]
         val helperCost = if (_isHelperRequired.value) 80.0 else 0.0
@@ -252,30 +331,91 @@ class LogisticsViewModel(application: Application) : AndroidViewModel(applicatio
         return (baseCalculated * 10.0).roundToInt() / 10.0
     }
 
+    /**
+     * Validates that pickup and dropoff locations are properly selected and distinct
+     */
+    fun validateBooking(): BookingValidationResult {
+        val pickup = _pickupAddress.value.trim()
+        val dropoff = _dropoffAddress.value.trim()
+
+        if (pickup.isEmpty() || pickup.length < 3) {
+            val err = BookingValidationResult.Invalid("Please enter or select a valid pickup location.", isPickupError = true)
+            _validationState.value = err
+            return err
+        }
+
+        if (dropoff.isEmpty() || dropoff.length < 3) {
+            val err = BookingValidationResult.Invalid("Please enter or select a valid drop-off destination.", isDropoffError = true)
+            _validationState.value = err
+            return err
+        }
+
+        // Check if pickup and dropoff are effectively identical
+        val pPlace = _pickupPlace.value
+        val dPlace = _dropoffPlace.value
+        val isIdenticalPlace = (pPlace.placeId == dPlace.placeId) ||
+                (pickup.equals(dropoff, ignoreCase = true)) ||
+                (GoogleMapsRoutingService.haversineDistance(pPlace.latitude, pPlace.longitude, dPlace.latitude, dPlace.longitude) < 0.1)
+
+        if (isIdenticalPlace) {
+            val err = BookingValidationResult.Invalid(
+                "Pickup and Drop-off locations cannot be identical. Please select different points.",
+                isPickupError = true,
+                isDropoffError = true
+            )
+            _validationState.value = err
+            return err
+        }
+
+        val valid = BookingValidationResult.Valid
+        _validationState.value = valid
+        return valid
+    }
+
+    /**
+     * Books ride and saves full Place IDs, Lat/Lng coordinates, Actual Road KM, and Route info to backend Room DB
+     */
     fun bookRide(
         onSuccess: (BookingOrder) -> Unit = {}
     ) {
+        val validation = validateBooking()
+        if (validation !is BookingValidationResult.Valid) {
+            return
+        }
+
         viewModelScope.launch {
             val tier = VehicleCatalog.tiers.find { it.id == _selectedVehicleId.value } ?: VehicleCatalog.tiers[2]
-            val routeInfo = _routeDistanceInfo.value
-            val distance = routeInfo.distanceKm
-            val fare = calculateEstimatedFare(tier.id, distance)
+            val directions = _directionsResult.value
+            val actualKm = directions.actualRoadKm
+            val fare = calculateEstimatedFare(tier.id, actualKm)
             val randomId = "AKH-" + Random.nextInt(10000, 99999)
             val randomOtp = (Random.nextInt(1000, 9000) + 1000).toString()
+
+            val pPlace = _pickupPlace.value
+            val dPlace = _dropoffPlace.value
 
             val order = BookingOrder(
                 id = randomId,
                 customerPhone = _userPhone.value,
                 customerName = _userName.value,
-                pickupAddress = _pickupAddress.value.ifBlank { "Indiranagar 100ft Rd, Bengaluru" },
-                dropoffAddress = _dropoffAddress.value.ifBlank { "Koramangala 4th Block, Bengaluru" },
+                pickupAddress = _pickupAddress.value.ifBlank { pPlace.name },
+                dropoffAddress = _dropoffAddress.value.ifBlank { dPlace.name },
+                pickupPlaceId = pPlace.placeId,
+                dropoffPlaceId = dPlace.placeId,
+                pickupLat = pPlace.latitude,
+                pickupLng = pPlace.longitude,
+                dropoffLat = dPlace.latitude,
+                dropoffLng = dPlace.longitude,
                 vehicleTierId = tier.id,
                 vehicleName = tier.name,
                 goodsType = _selectedGoodsType.value,
                 helperRequired = _isHelperRequired.value,
                 helperFee = if (_isHelperRequired.value) 80.0 else 0.0,
                 fare = fare,
-                distanceKm = distance,
+                distanceKm = actualKm,
+                actualRoadKm = actualKm,
+                routeSummary = directions.routeSummary,
+                routingProfile = tier.routingProfile.name,
                 paymentMethod = _selectedPaymentMethod.value,
                 status = "DRIVER_ASSIGNED",
                 driverName = "Ravi Kumar",
@@ -283,11 +423,35 @@ class LogisticsViewModel(application: Application) : AndroidViewModel(applicatio
                 driverRating = 4.88,
                 driverVehicleNumber = "KA 05 MX 2190",
                 startOtp = randomOtp,
-                etaMinutes = routeInfo.estimatedDurationMinutes
+                etaMinutes = directions.etaMinutes,
+                assignedDriverId = "DRV-101"
             )
+
             repository.createOrder(order)
             _driverIncomingRequest.value = order
             onSuccess(order)
+        }
+    }
+
+    /**
+     * Snap driver GPS telemetry to road using Roads API algorithm
+     */
+    fun getSnappedDriverLocation(rawGps: LatLng?): LatLng {
+        if (rawGps == null) {
+            val waypoints = _directionsResult.value.waypoints
+            return if (waypoints.size > 2) waypoints[waypoints.size / 2] else LatLng(12.9710, 77.6350)
+        }
+        val waypoints = _directionsResult.value.waypoints
+        return GoogleMapsRoutingService.snapToRoad(rawGps, waypoints)
+    }
+
+    fun toggleDriverOnline(context: Context) {
+        val newState = !_isDriverOnline.value
+        _isDriverOnline.value = newState
+        if (newState) {
+            LocationManager.startLocationService(context)
+        } else {
+            LocationManager.stopLocationService(context)
         }
     }
 
@@ -358,13 +522,15 @@ class LogisticsViewModel(application: Application) : AndroidViewModel(applicatio
             customerName = listOf("Ananya Sharma", "Vikram Malhotra", "Karthik Iyer", "Sunita Rao").random(),
             pickupAddress = trip.first,
             dropoffAddress = trip.second,
-            vehicleTierId = "tata_ace",
+            vehicleTierId = "tata",
             vehicleName = "Tata Ace (Chota Hathi)",
             goodsType = trip.third,
             helperRequired = true,
             helperFee = 80.0,
             fare = randomFare,
             distanceKm = distance,
+            actualRoadKm = distance,
+            routeSummary = "$distance km • ~20 mins",
             paymentMethod = listOf("Online UPI", "Cash on Delivery", "Corporate Invoice").random(),
             status = "DRIVER_ASSIGNED",
             driverName = "Ravi Kumar",
@@ -410,7 +576,6 @@ class LogisticsViewModel(application: Application) : AndroidViewModel(applicatio
                 driverVehicleNumber = driver.vehicleNumber
             )
 
-            // Trigger local notification to alert the driver of new delivery request
             val ctx = context ?: getApplication<Application>().applicationContext
             DeliveryNotificationHelper.notifyDriverAssignment(
                 context = ctx,
@@ -423,7 +588,6 @@ class LogisticsViewModel(application: Application) : AndroidViewModel(applicatio
                 driverName = driver.name
             )
 
-            // If the assigned driver is the active demo driver (Ravi Kumar), update live prompt
             if (driver.driverId == "DRV-101") {
                 _driverIncomingRequest.value = assignedOrder
             }

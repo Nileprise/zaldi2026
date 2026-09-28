@@ -42,6 +42,7 @@ import com.example.ui.theme.AmberPrimary
 import com.example.ui.theme.LogisticsBlue
 import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.TextDark
+import com.example.util.GoogleMapsRoutingService
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -65,20 +66,41 @@ fun GoogleMapsView(
     dropoffLatLng: LatLng = LatLng(12.9352, 77.6245), // Koramangala 4th Block
     pickupTitle: String = "Pickup: Indiranagar",
     dropoffTitle: String = "Drop-off: Koramangala",
+    pickupPlaceId: String? = "ChIJbU60qSX9vzsR0whvgm0FmWg",
+    dropoffPlaceId: String? = "ChIJL_7_4sBkrjsR9r2jCskd81c",
+    customWaypoints: List<LatLng>? = null,
+    vehicleType: String = "tata",
     isInteractive: Boolean = true
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    val currentDriverLatLng = remember(driverLocation?.latitude, driverLocation?.longitude) {
-        if (driverLocation != null) {
-            LatLng(driverLocation.latitude, driverLocation.longitude)
+    // Determine road polyline connecting pickup to dropoff
+    val activeRouteWaypoints = remember(pickupLatLng, dropoffLatLng, customWaypoints) {
+        if (!customWaypoints.isNullOrEmpty()) {
+            customWaypoints
         } else {
-            LatLng(12.9710, 77.6350) // Default midpoint along freight route
+            listOf(
+                pickupLatLng,
+                LatLng((pickupLatLng.latitude * 2 + dropoffLatLng.latitude) / 3, (pickupLatLng.longitude * 2 + dropoffLatLng.longitude) / 3),
+                LatLng((pickupLatLng.latitude + dropoffLatLng.latitude * 2) / 3, (pickupLatLng.longitude + dropoffLatLng.longitude * 2) / 3),
+                dropoffLatLng
+            )
+        }
+    }
+
+    // Apply Roads API: Snap-to-Roads algorithm to GPS driver coordinate
+    val currentDriverLatLng = remember(driverLocation?.latitude, driverLocation?.longitude, activeRouteWaypoints) {
+        if (driverLocation != null) {
+            val raw = LatLng(driverLocation.latitude, driverLocation.longitude)
+            GoogleMapsRoutingService.snapToRoad(raw, activeRouteWaypoints)
+        } else {
+            // Midpoint on route
+            activeRouteWaypoints[activeRouteWaypoints.size / 2]
         }
     }
 
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(currentDriverLatLng, 14.5f)
+        position = CameraPosition.fromLatLngZoom(currentDriverLatLng, 14.2f)
     }
 
     var mapType by remember { mutableStateOf(MapType.NORMAL) }
@@ -160,17 +182,6 @@ fun GoogleMapsView(
         )
     }
 
-    // Route points from pickup -> live driver location -> dropoff
-    val routePoints = remember(currentDriverLatLng) {
-        listOf(
-            pickupLatLng,
-            LatLng(12.9650, 77.6380),
-            currentDriverLatLng,
-            LatLng(12.9480, 77.6310),
-            dropoffLatLng
-        )
-    }
-
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -187,7 +198,7 @@ fun GoogleMapsView(
             Marker(
                 state = MarkerState(position = pickupLatLng),
                 title = pickupTitle,
-                snippet = "Scheduled Goods Pickup",
+                snippet = "Place ID: ${pickupPlaceId?.take(16) ?: "Auto"} • Scheduled Pickup",
                 icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
             )
 
@@ -195,16 +206,21 @@ fun GoogleMapsView(
             Marker(
                 state = MarkerState(position = dropoffLatLng),
                 title = dropoffTitle,
-                snippet = "Consignee Destination",
-                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
+                snippet = "Place ID: ${dropoffPlaceId?.take(16) ?: "Auto"} • Destination Consignee",
+                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
             )
 
-            // Live Driver GPS Marker
+            // Live Driver GPS Marker (Snapped to Road)
+            val driverHue = when (vehicleType) {
+                "bike" -> BitmapDescriptorFactory.HUE_VIOLET
+                "auto" -> BitmapDescriptorFactory.HUE_YELLOW
+                else -> BitmapDescriptorFactory.HUE_AZURE
+            }
             Marker(
                 state = MarkerState(position = currentDriverLatLng),
-                title = "Driver: Ravi Kumar (Tata Ace)",
-                snippet = "Speed: ${driverLocation?.speedKmh ?: 24.5f} km/h • KA 05 MX 2190",
-                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
+                title = "Driver: Ravi Kumar ($vehicleType)",
+                snippet = "Road-Snapped GPS • Speed: ${driverLocation?.speedKmh ?: 24.5f} km/h",
+                icon = BitmapDescriptorFactory.defaultMarker(driverHue)
             )
 
             // Accuracy Radius Circle
@@ -218,14 +234,14 @@ fun GoogleMapsView(
 
             // Route Polyline Glow
             Polyline(
-                points = routePoints,
-                color = AmberPrimary.copy(alpha = 0.4f),
+                points = activeRouteWaypoints,
+                color = AmberPrimary.copy(alpha = 0.35f),
                 width = 16f
             )
 
-            // Main Polyline
+            // Main Route Polyline
             Polyline(
-                points = routePoints,
+                points = activeRouteWaypoints,
                 color = AmberPrimary,
                 width = 8f
             )
@@ -270,18 +286,32 @@ fun GoogleMapsView(
                     .align(Alignment.TopEnd)
                     .padding(12.dp)
             ) {
-                SmallFloatingActionButton(
-                    onClick = {
-                        mapType = if (mapType == MapType.NORMAL) MapType.HYBRID else MapType.NORMAL
-                    },
-                    containerColor = Color.White,
-                    contentColor = AmberPrimary,
-                    modifier = Modifier.testTag("toggle_map_type_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Layers,
-                        contentDescription = "Map Style"
-                    )
+                Row {
+                    SmallFloatingActionButton(
+                        onClick = { isTrafficEnabled = !isTrafficEnabled },
+                        containerColor = if (isTrafficEnabled) AmberPrimary else Color.White,
+                        contentColor = if (isTrafficEnabled) Color.White else TextDark,
+                        modifier = Modifier.padding(end = 8.dp).testTag("toggle_traffic_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Traffic,
+                            contentDescription = "Toggle Traffic"
+                        )
+                    }
+
+                    SmallFloatingActionButton(
+                        onClick = {
+                            mapType = if (mapType == MapType.NORMAL) MapType.HYBRID else MapType.NORMAL
+                        },
+                        containerColor = Color.White,
+                        contentColor = AmberPrimary,
+                        modifier = Modifier.testTag("toggle_map_type_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Layers,
+                            contentDescription = "Map Style"
+                        )
+                    }
                 }
             }
 
@@ -295,7 +325,7 @@ fun GoogleMapsView(
                         coroutineScope.launch {
                             runCatching {
                                 cameraPositionState.animate(
-                                    CameraUpdateFactory.newLatLngZoom(currentDriverLatLng, 16f),
+                                    CameraUpdateFactory.newLatLngZoom(currentDriverLatLng, 15.5f),
                                     durationMs = 600
                                 )
                             }

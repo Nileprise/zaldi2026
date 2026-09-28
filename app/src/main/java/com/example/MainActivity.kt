@@ -144,6 +144,9 @@ fun LogisticsApp(viewModel: LogisticsViewModel) {
 
     val pickupAddress by viewModel.pickupAddress.collectAsStateWithLifecycle()
     val dropoffAddress by viewModel.dropoffAddress.collectAsStateWithLifecycle()
+    val pickupPlace by viewModel.pickupPlace.collectAsStateWithLifecycle()
+    val dropoffPlace by viewModel.dropoffPlace.collectAsStateWithLifecycle()
+    val directionsResult by viewModel.directionsResult.collectAsStateWithLifecycle()
     val routeDistanceInfo by viewModel.routeDistanceInfo.collectAsStateWithLifecycle()
     val selectedVehicleId by viewModel.selectedVehicleId.collectAsStateWithLifecycle()
     val selectedGoodsType by viewModel.selectedGoodsType.collectAsStateWithLifecycle()
@@ -225,6 +228,9 @@ fun LogisticsApp(viewModel: LogisticsViewModel) {
                                 BookingFlowScreen(
                                     pickupAddress = pickupAddress,
                                     dropoffAddress = dropoffAddress,
+                                    pickupPlace = pickupPlace,
+                                    dropoffPlace = dropoffPlace,
+                                    directionsResult = directionsResult,
                                     routeDistanceInfo = routeDistanceInfo,
                                     selectedVehicleId = selectedVehicleId,
                                     selectedGoodsType = selectedGoodsType,
@@ -232,6 +238,8 @@ fun LogisticsApp(viewModel: LogisticsViewModel) {
                                     selectedPaymentMethod = selectedPaymentMethod,
                                     onPickupChange = viewModel::setPickup,
                                     onDropoffChange = viewModel::setDropoff,
+                                    onSelectPickupPlace = viewModel::setPickupPlace,
+                                    onSelectDropoffPlace = viewModel::setDropoffPlace,
                                     onSetCustomDistance = viewModel::setCustomDistance,
                                     onResetDistance = viewModel::resetDistanceToAuto,
                                     onVehicleSelect = viewModel::setVehicle,

@@ -1,11 +1,40 @@
 {
-  "projectId": "serene-notch-429319-e4",
-  "appId": "1:578342389331:web:c3b6707f90f6f645b1a8a6",
-  "apiKey": "AIzaSyCtW8OJdlPZwJugxTTZ2PMyk3u-D7ePkQ8",
-  "authDomain": "serene-notch-429319-e4.firebaseapp.com",
-  "storageBucket": "serene-notch-429319-e4.firebasestorage.app",
-  "messagingSenderId": "578342389331",
-  "measurementId": "",
-  "oAuthClientId": "578342389331-jt0m26rcrps43msdmdd0kgnvt9neurbe.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "project_info": {
+    "project_number": "992829853631",
+    "firebase_url": "https://zaldi-25092026-default-rtdb.firebaseio.com",
+    "project_id": "zaldi-25092026",
+    "storage_bucket": "zaldi-25092026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:992829853631:android:edb9c3c2aa2703869c5b0a",
+        "android_client_info": {
+          "package_name": "com.ZALDI.deliveryapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "992829853631-lpv2pj3grf4u5oinkenfg7r6n9a8r7pm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMuSTd_9DePAjYDZ_5JEObMMgdmN9RAik"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "992829853631-lpv2pj3grf4u5oinkenfg7r6n9a8r7pm.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
 }

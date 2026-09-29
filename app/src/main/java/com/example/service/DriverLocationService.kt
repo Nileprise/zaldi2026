@@ -14,6 +14,7 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.MainActivity
@@ -27,21 +28,38 @@ import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Modernized Foreground Service for Driver Telemetry.
+ * Compliant with Android 14+ strict location service rules.
+ */
 class DriverLocationService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var locationCallback: LocationCallback? = null
     private var simulationJob: Job? = null
-    private val serviceScope = CoroutineScope(Dispatchers.Default)
+    
+    // Modern Coroutine Scope: Use SupervisorJob so a single failure doesn't crash the service
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    // Future-proofing: State to track if driver is actively delivering (high accuracy needed) 
+    // vs just waiting for orders (balanced power needed).
+    private var isActivelyDelivering = false
 
     companion object {
+        private const val TAG = "DriverLocationService"
         const val ACTION_START = "ACTION_START_LOCATION_SERVICE"
         const val ACTION_STOP = "ACTION_STOP_LOCATION_SERVICE"
+        const val ACTION_SET_DELIVERING_STATE = "ACTION_SET_DELIVERING_STATE"
+        const val EXTRA_IS_DELIVERING = "EXTRA_IS_DELIVERING"
+        
         const val NOTIFICATION_CHANNEL_ID = "driver_telemetry_channel"
         const val NOTIFICATION_ID = 1001
     }
@@ -56,27 +74,32 @@ class DriverLocationService : Service() {
         when (intent?.action) {
             ACTION_START -> startTelemetryService()
             ACTION_STOP -> stopTelemetryService()
+            ACTION_SET_DELIVERING_STATE -> {
+                val newState = intent.getBooleanExtra(EXTRA_IS_DELIVERING, false)
+                if (newState != isActivelyDelivering) {
+                    isActivelyDelivering = newState
+                    restartLocationUpdatesWithOptimalPower()
+                }
+            }
         }
         return START_NOT_STICKY
     }
 
     private fun hasLocationPermission(): Boolean {
-        val fine = ContextCompat.checkSelfPermission(
-            this,
-            android.Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
+        val fine = ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        
+        // Android 14+ requires explicit background tracking permissions for foreground services
+        val background = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
+        } else true
 
-        val coarse = ContextCompat.checkSelfPermission(
-            this,
-            android.Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        return fine || coarse
+        return (fine || coarse) && background
     }
 
     private fun startTelemetryService() {
         if (!hasLocationPermission()) {
-            // Android 14+ targetSdk 34+ requires ACCESS_FINE_LOCATION or ACCESS_COARSE_LOCATION to start location FGS
+            Log.e(TAG, "Insufficient location permissions. Stopping service.")
             stopSelf()
             return
         }
@@ -84,8 +107,8 @@ class DriverLocationService : Service() {
         LocationManager.setServiceRunning(true)
 
         val notification = createNotification(
-            "Akhil Logistics • Driver GPS Live",
-            "Transmitting real-time GPS telemetry to dispatch"
+            title = "Akhil Logistics • Driver GPS Live",
+            content = "Transmitting real-time GPS telemetry to dispatch"
         )
 
         try {
@@ -98,42 +121,58 @@ class DriverLocationService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
-        } catch (e: SecurityException) {
-            e.printStackTrace()
-            stopSelf()
-            return
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to start foreground service: ${e.message}")
             stopSelf()
             return
         }
 
         requestFusedLocationUpdates()
-        startSimulationFallback()
+        
+        // Start simulation ONLY in debug/demo mode
+        // if (BuildConfig.DEBUG) startSimulationFallback() 
     }
 
     private fun stopTelemetryService() {
         LocationManager.setServiceRunning(false)
         stopFusedLocationUpdates()
+        
         simulationJob?.cancel()
         simulationJob = null
+        
         try {
-            stopForeground(STOP_FOREGROUND_REMOVE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error stopping foreground: ${e.message}")
         }
+        
         stopSelf()
+    }
+
+    private fun restartLocationUpdatesWithOptimalPower() {
+        if (locationCallback != null) {
+            stopFusedLocationUpdates()
+            requestFusedLocationUpdates()
+        }
     }
 
     @SuppressLint("MissingPermission")
     private fun requestFusedLocationUpdates() {
-        if (!hasLocationPermission()) {
-            return
-        }
+        if (!hasLocationPermission()) return
 
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 4000L)
-            .setMinUpdateIntervalMillis(2000L)
-            .setMinUpdateDistanceMeters(2.0f)
+        // Modern Battery Optimization: 
+        // If delivering, update every 4 secs. If just idling online, update every 15 secs to save battery.
+        val intervalMillis = if (isActivelyDelivering) 4000L else 15000L
+        val priority = if (isActivelyDelivering) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY
+
+        val locationRequest = LocationRequest.Builder(priority, intervalMillis)
+            .setMinUpdateIntervalMillis(intervalMillis / 2)
+            .setMinUpdateDistanceMeters(if (isActivelyDelivering) 2.0f else 10.0f)
             .setWaitForAccurateLocation(false)
             .build()
 
@@ -148,11 +187,11 @@ class DriverLocationService : Service() {
         try {
             fusedLocationClient.requestLocationUpdates(
                 locationRequest,
-                locationCallback as LocationCallback,
+                locationCallback!!,
                 Looper.getMainLooper()
             )
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to request location updates: ${e.message}")
         }
     }
 
@@ -161,76 +200,57 @@ class DriverLocationService : Service() {
             try {
                 fusedLocationClient.removeLocationUpdates(it)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "Failed to remove location updates: ${e.message}")
             }
             locationCallback = null
         }
     }
 
     private fun handleNewLocation(location: Location, isLive: Boolean) {
-        val speedKmh = if (location.hasSpeed()) location.speed * 3.6f else 28.0f
+        val speedKmh = if (location.hasSpeed()) location.speed * 3.6f else 0.0f
+        
         val telemetry = DriverLocationData(
             latitude = location.latitude,
             longitude = location.longitude,
-            speedKmh = (speedKmh * 10).toInt() / 10f,
-            accuracyMeters = if (location.hasAccuracy()) location.accuracy else 4.5f,
+            speedKmh = (speedKmh * 10).toInt() / 10f, // Rounded to 1 decimal
+            accuracyMeters = if (location.hasAccuracy()) location.accuracy else 10f,
             altitude = location.altitude,
-            bearing = if (location.hasBearing()) location.bearing else 45f,
+            bearing = if (location.hasBearing()) location.bearing else 0f,
             timestamp = System.currentTimeMillis(),
             isLiveGps = isLive
         )
+        
+        // 1. Update internal state
         LocationManager.updateLocation(telemetry)
+        
+        // 2. Publish to backend (RealtimeDatabase / Kafka via Repository)
+        // In a real app, you would inject a repository here to send this to the cloud:
+        // locationRepository.publishLiveTelemetry(telemetry)
 
+        // 3. Update the persistent notification so Android doesn't kill the service
         try {
+            val statusText = if (isActivelyDelivering) "In Transit" else "Online & Waiting"
             val updatedNotification = createNotification(
-                "Driver Live GPS Active (${telemetry.formattedTime})",
-                "${telemetry.formattedCoordinates} • ${telemetry.speedKmh} km/h"
+                title = "Driver GPS Active • $statusText",
+                content = "${telemetry.formattedCoordinates} • ${telemetry.speedKmh} km/h"
             )
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.notify(NOTIFICATION_ID, updatedNotification)
         } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun startSimulationFallback() {
-        simulationJob?.cancel()
-        simulationJob = serviceScope.launch {
-            var currentLat = 12.9784
-            var currentLng = 77.6408
-            var currentSpeed = 26.5f
-
-            while (isActive) {
-                delay(3000L)
-
-                val latDelta = (Random.nextDouble() - 0.45) * 0.0004
-                val lngDelta = (Random.nextDouble() - 0.45) * 0.0004
-                currentLat += latDelta
-                currentLng += lngDelta
-                currentSpeed = (20f + Random.nextFloat() * 15f)
-
-                val simulatedLocation = Location("simulated_gps").apply {
-                    latitude = currentLat
-                    longitude = currentLng
-                    speed = currentSpeed / 3.6f
-                    accuracy = 3.5f + Random.nextFloat() * 2f
-                    altitude = 918.0 + Random.nextDouble() * 3.0
-                    bearing = (30f + Random.nextFloat() * 40f)
-                    time = System.currentTimeMillis()
-                }
-
-                if (locationCallback == null) {
-                    handleNewLocation(simulatedLocation, isLive = true)
-                }
-            }
+             Log.e(TAG, "Failed to update notification: ${e.message}")
         }
     }
 
     private fun createNotification(title: String, content: String): Notification {
+        // Modern Intent routing
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        
         val pendingIntent = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
@@ -240,7 +260,7 @@ class DriverLocationService : Service() {
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_LOW) // Keep low to prevent constant sound/vibration
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
     }
@@ -252,7 +272,8 @@ class DriverLocationService : Service() {
                 "Driver Live Telemetry",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Background GPS location tracking for Akhil Logistics driver partners"
+                description = "Background GPS location tracking for dispatch operations"
+                setShowBadge(false) // Don't clutter the app icon with a badge for an ongoing service
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
@@ -261,6 +282,7 @@ class DriverLocationService : Service() {
 
     override fun onDestroy() {
         stopTelemetryService()
+        serviceScope.cancel() // Clean up coroutines strictly to prevent memory leaks
         super.onDestroy()
     }
 

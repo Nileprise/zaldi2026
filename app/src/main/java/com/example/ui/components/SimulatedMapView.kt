@@ -78,12 +78,12 @@ fun SimulatedMapView(
     )
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFFE8ECEF))
-            .testTag("simulated_map_view")
-    ) {
+    modifier = modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(12.dp)) // Sharpened from 20.dp
+        .background(Color(0xFFE8ECEF))
+        .testTag("simulated_map_view")
+) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val width = size.width
             val height = size.height

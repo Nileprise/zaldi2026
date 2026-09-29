@@ -3,9 +3,44 @@ package com.example.domain.model
 import java.math.BigDecimal
 import java.time.Instant
 
+// ============================================================================
+// Core Value Objects
+// ============================================================================
+
+/**
+ * Ensures financial calculations never mix up currencies.
+ */
+data class Money(
+    val amount: BigDecimal,
+    val currencyCode: String = "INR"
+) {
+    operator fun plus(other: Money): Money {
+        require(this.currencyCode == other.currencyCode) { "Cannot add mixed currencies" }
+        return Money(this.amount + other.amount, this.currencyCode)
+    }
+}
+
+/**
+ * Represents a scheduled timeframe rather than a specific second.
+ */
+data class TimeWindow(
+    val earliestStart: Instant,
+    val latestEnd: Instant
+)
+
+/**
+ * Groups physical dimensions for capacity planning.
+ */
+data class ItemDimensions(
+    val lengthCm: Double,
+    val widthCm: Double,
+    val heightCm: Double
+) {
+    val volumeCubicCm: Double get() = lengthCm * widthCm * heightCm
+}
+
 /**
  * Encapsulates all data related to a physical location.
- * Cleans up the Order class by grouping address, coordinates, and instructions.
  */
 data class LocationPoint(
     val address: String,
@@ -15,19 +50,32 @@ data class LocationPoint(
     val specialInstructions: String? = null // e.g., "Ring bell twice", "Gate code 1234"
 )
 
+// ============================================================================
+// Enums
+// ============================================================================
+
 enum class OrderStatus {
-    PENDING,              // Created, waiting for driver assignment
-    ASSIGNED,             // Driver assigned
-    DRIVER_ACCEPTED,      // Driver accepted the order
-    DRIVER_EN_ROUTE,      // Driver heading to pickup
-    DRIVER_ARRIVED,       // Driver at pickup location
-    PICKUP_IN_PROGRESS,   // Items being loaded
-    IN_TRANSIT,           // In delivery
-    DELIVERY_ARRIVED,     // At delivery location
-    DELIVERY_IN_PROGRESS, // Handoff happening
-    COMPLETED,            // Successfully delivered
-    CANCELLED,            // Order cancelled
-    FAILED                // Delivery failed (e.g., recipient not found)
+    PENDING,
+    ASSIGNED,
+    DRIVER_ACCEPTED,
+    DRIVER_EN_ROUTE,
+    DRIVER_ARRIVED,
+    PICKUP_IN_PROGRESS,
+    IN_TRANSIT,
+    DELIVERY_ARRIVED,
+    DELIVERY_IN_PROGRESS,
+    COMPLETED,
+    CANCELLED,
+    FAILED
+}
+
+enum class DeliveryFailureReason {
+    CUSTOMER_UNAVAILABLE,
+    WRONG_ADDRESS,
+    GOODS_DAMAGED,
+    VEHICLE_BREAKDOWN,
+    PAYMENT_FAILED,
+    RECIPIENT_REJECTED
 }
 
 enum class PaymentMethod {
@@ -51,6 +99,25 @@ enum class OrderPriority {
     SCHEDULED
 }
 
+// ============================================================================
+// Main Domain Models
+// ============================================================================
+
+/**
+ * Granular breakdown of the trip cost for receipts and UI display.
+ */
+data class FareBreakdown(
+    val baseFare: Money,
+    val distanceFare: Money,
+    val timeFare: Money,
+    val surgeFee: Money,
+    val tollCharges: Money,
+    val discount: Money,
+    val taxAmount: Money,
+    val totalPayable: Money,
+    val driverCommission: Money // What the driver earns
+)
+
 /**
  * Modernized Order Domain Model.
  */
@@ -73,23 +140,22 @@ data class Order(
     val securityPin: String? = null, // OTP required to start or complete trip
     val trackingUrlId: String? = null, // Unique hash for public web tracking link
     
-    // --- Financials (Always use BigDecimal for money) ---
-    val grossFare: BigDecimal,
-    val payableFare: BigDecimal,
-    val taxAmount: BigDecimal,
-    val commissionAmount: BigDecimal,
+    // --- Financials ---
+    val fareBreakdown: FareBreakdown,
     val paymentMethod: PaymentMethod,
+    val isPaid: Boolean = false,
     
-    // --- State & Timestamps (Using Instant for strict time precision) ---
+    // --- State & Timestamps ---
     val orderStatus: OrderStatus = OrderStatus.PENDING,
-    val scheduledTime: Instant? = null, // If null, assume ASAP
+    val deliveryWindow: TimeWindow? = null, // If null, assume ASAP
     val createdAt: Instant = Instant.now(),
     val assignedAt: Instant? = null,
     val completedAt: Instant? = null,
     
-    // --- Cancellation Metadata ---
+    // --- Failure/Cancellation Metadata ---
     val cancellationReason: String? = null,
     val cancelledBy: CancellationActor? = null,
+    val failureReason: DeliveryFailureReason? = null,
     
     // --- Sub-Entities ---
     val orderItems: List<OrderItem> = emptyList(),
@@ -100,8 +166,12 @@ data class Order(
 data class OrderItem(
     val itemId: String,
     val description: String,
-    val weightKg: Double, // Clarified unit in variable name
+    val weightKg: Double,
     val quantity: Int,
+    // Modern Additions for precise vehicle allocation
+    val dimensions: ItemDimensions? = null,
+    val isFragile: Boolean = false,
+    val requiresColdChain: Boolean = false,
     val photos: List<String> = emptyList()
 )
 
@@ -119,20 +189,15 @@ data class ProofOfDelivery(
     val signaturePhotoUrl: String? = null,
     val itemPhotosBeforeDelivery: List<String> = emptyList(),
     val itemPhotosAfterDelivery: List<String> = emptyList(),
-    
-    // Future-proofing for cold-chain / pharmaceutical logistics
     val temperatureCelsius: Double? = null, 
     val notes: String? = null
 )
 
-/**
- * Used for multi-modal logistics (e.g., Truck takes to warehouse, Bike takes to door).
- */
 data class OrderChain(
     val chainId: String,
     val customerId: String,
-    val orderIds: List<String>, // ordered sequence of leg IDs
+    val orderIds: List<String>, 
     val sequenceIndex: Int, 
     val handoffLocation: LocationPoint? = null,
-    val scheduledHandoffTime: Instant? = null
+    val scheduledHandoffWindow: TimeWindow? = null
 )

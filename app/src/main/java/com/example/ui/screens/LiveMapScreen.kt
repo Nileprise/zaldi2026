@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.res.Configuration
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,14 +22,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.GpsFixed
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Traffic
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,21 +40,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.data.model.BookingOrder
 import com.example.data.model.DriverLocationData
 import com.example.ui.components.GoogleMapsView
 import com.example.ui.components.SimulatedMapView
-import com.example.ui.theme.AmberContainer
-import com.example.ui.theme.AmberPrimary
-import com.example.ui.theme.LogisticsBlue
-import com.example.ui.theme.LogisticsBlueContainer
-import com.example.ui.theme.SuccessContainer
-import com.example.ui.theme.SuccessGreen
-import com.example.ui.theme.SurfaceCard
-import com.example.ui.theme.TextDark
-import com.example.ui.theme.TextMuted
 import com.google.android.gms.maps.model.LatLng
 
 @Composable
@@ -61,50 +55,68 @@ fun LiveMapScreen(
     driverLocation: DriverLocationData?,
     isServiceRunning: Boolean,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    activeOrder: BookingOrder? = null,
+    pickupLatLng: LatLng? = null,
+    dropoffLatLng: LatLng? = null,
+    pickupTitle: String? = null,
+    dropoffTitle: String? = null,
+    driverName: String = "Assigned Driver",
+    vehicleInfo: String = "Commercial Fleet"
 ) {
     var isGoogleMapsMode by remember { mutableStateOf(true) }
 
-    val pickupCoords = LatLng(12.9784, 77.6408) // Indiranagar
-    val dropoffCoords = LatLng(12.9352, 77.6245) // Koramangala
+    // Resolve coordinates from active order or explicit parameters
+    val resolvedPickup = remember(activeOrder, pickupLatLng) {
+        pickupLatLng ?: activeOrder?.let { LatLng(it.pickupLat, it.pickupLng) }
+    }
+    val resolvedDropoff = remember(activeOrder, dropoffLatLng) {
+        dropoffLatLng ?: activeOrder?.let { LatLng(it.dropoffLat, it.dropoffLng) }
+    }
+
+    val resolvedPickupTitle = pickupTitle ?: activeOrder?.pickupAddress ?: "Origin"
+    val resolvedDropoffTitle = dropoffTitle ?: activeOrder?.dropoffAddress ?: "Destination"
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFE8ECEF))
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        if (isGoogleMapsMode) {
+        // --- Base Map Layer ---
+        if (isGoogleMapsMode && resolvedPickup != null && resolvedDropoff != null) {
             GoogleMapsView(
                 driverLocation = driverLocation,
                 modifier = Modifier.fillMaxSize(),
-                pickupLatLng = pickupCoords,
-                dropoffLatLng = dropoffCoords,
-                pickupTitle = "Indiranagar 100ft Rd",
-                dropoffTitle = "Koramangala 4th Block",
-                pickupPlaceId = "ChIJbU60qSX9vzsR0whvgm0FmWg",
-                dropoffPlaceId = "ChIJL_7_4sBkrjsR9r2jCskd81c",
+                pickupLatLng = resolvedPickup,
+                dropoffLatLng = resolvedDropoff,
+                pickupTitle = resolvedPickupTitle,
+                dropoffTitle = resolvedDropoffTitle,
+                pickupPlaceId = activeOrder?.pickupPlaceId,
+                dropoffPlaceId = activeOrder?.dropoffPlaceId,
+                vehicleType = activeOrder?.vehicleTierId ?: "standard",
                 isInteractive = true
             )
         } else {
             SimulatedMapView(
                 driverLocation = driverLocation,
                 modifier = Modifier.fillMaxSize(),
-                isTrackingActiveRide = true,
-                pickupName = "Indiranagar 100ft Rd",
-                dropoffName = "Koramangala 4th Block",
-                etaMinutes = 11
+                isTrackingActiveRide = activeOrder != null,
+                pickupName = resolvedPickupTitle,
+                dropoffName = resolvedDropoffTitle,
+                etaMinutes = activeOrder?.etaMinutes ?: 0
             )
         }
 
-        // Top Header Bar
+        // --- Top Floating Header HUD ---
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(12.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             shape = RoundedCornerShape(20.dp),
-            color = Color.White.copy(alpha = 0.95f),
-            shadowElevation = 4.dp
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+            shadowElevation = 6.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         ) {
             Row(
                 modifier = Modifier
@@ -121,69 +133,61 @@ fun LiveMapScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = TextDark
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Column(modifier = Modifier.padding(start = 4.dp)) {
                         Text(
-                            text = "Live Fleet Telemetry",
-                            fontSize = 15.sp,
+                            text = "Live Telemetry Tracking",
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = TextDark
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
                                     .size(7.dp)
-                                    .background(if (isServiceRunning) SuccessGreen else AmberPrimary, CircleShape)
+                                    .background(
+                                        if (isServiceRunning) Color(0xFF059669) else MaterialTheme.colorScheme.tertiary,
+                                        CircleShape
+                                    )
                             )
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isServiceRunning) " Background GPS Streaming Live" else " Live GPS Provider",
-                                fontSize = 11.sp,
-                                color = TextMuted
+                                text = if (isServiceRunning) "Foreground GPS streaming" else "Standard provider",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
 
                 // Map Style Switcher
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .background(Color(0xFFF1F5F9), RoundedCornerShape(12.dp))
-                        .padding(2.dp)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.padding(end = 4.dp)
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isGoogleMapsMode) AmberPrimary else Color.Transparent,
-                        modifier = Modifier.clickable { isGoogleMapsMode = true }
+                    Row(
+                        modifier = Modifier.padding(3.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
+                        MapToggleOption(
                             text = "SDK",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isGoogleMapsMode) Color.White else TextMuted,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                            isSelected = isGoogleMapsMode,
+                            onClick = { isGoogleMapsMode = true }
                         )
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (!isGoogleMapsMode) AmberPrimary else Color.Transparent,
-                        modifier = Modifier.clickable { isGoogleMapsMode = false }
-                    ) {
-                        Text(
+                        MapToggleOption(
                             text = "Vector",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (!isGoogleMapsMode) Color.White else TextMuted,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                            isSelected = !isGoogleMapsMode,
+                            onClick = { isGoogleMapsMode = false }
                         )
                     }
                 }
             }
         }
 
-        // Bottom Telemetry HUD Card
+        // --- Bottom Telemetry Dashboard Card ---
         Card(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -191,8 +195,11 @@ fun LiveMapScreen(
                 .navigationBarsPadding()
                 .padding(16.dp),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -200,100 +207,150 @@ fun LiveMapScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "ROADS API SNAP-TO-ROADS TELEMETRY",
-                            fontSize = 9.sp,
+                            text = "SNAP-TO-ROADS REAL-TIME TELEMETRY",
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.ExtraBold,
-                            color = AmberPrimary,
+                            color = MaterialTheme.colorScheme.primary,
                             letterSpacing = 0.8.sp
                         )
                         Text(
-                            text = "Ravi Kumar • Tata Ace KA 05 MX 2190",
-                            fontSize = 14.sp,
+                            text = "${activeOrder?.driverName ?: driverName} • ${activeOrder?.driverVehicleNumber ?: vehicleInfo}",
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = TextDark
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = SuccessContainer
+                        color = if (activeOrder != null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
-                            text = "Active Trip",
-                            fontSize = 10.sp,
+                            text = if (activeOrder != null) "In Transit" else "Monitoring",
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = SuccessGreen,
+                            color = if (activeOrder != null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Speed,
-                            contentDescription = "Speed",
-                            tint = AmberPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Column {
-                            Text(text = "Speed", fontSize = 10.sp, color = TextMuted)
-                            Text(
-                                text = "${driverLocation?.speedKmh?.toInt() ?: 24} km/h",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextDark
-                            )
-                        }
-                    }
+                    TelemetryMetric(
+                        icon = Icons.Default.Speed,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        label = "Speed",
+                        value = "${driverLocation?.speedKmh?.toInt() ?: 0} km/h"
+                    )
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Navigation,
-                            contentDescription = "Bearing",
-                            tint = LogisticsBlue,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Column {
-                            Text(text = "Heading", fontSize = 10.sp, color = TextMuted)
-                            Text(
-                                text = "${driverLocation?.bearing?.toInt() ?: 145}° SE",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextDark
-                            )
-                        }
-                    }
+                    TelemetryMetric(
+                        icon = Icons.Default.Navigation,
+                        iconTint = MaterialTheme.colorScheme.secondary,
+                        label = "Heading",
+                        value = formatHeading(driverLocation?.bearing)
+                    )
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.GpsFixed,
-                            contentDescription = "Accuracy",
-                            tint = SuccessGreen,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Column {
-                            Text(text = "GPS Accuracy", fontSize = 10.sp, color = TextMuted)
-                            Text(
-                                text = "±${driverLocation?.accuracyMeters?.toInt() ?: 8}m",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextDark
-                            )
-                        }
-                    }
+                    TelemetryMetric(
+                        icon = Icons.Default.GpsFixed,
+                        iconTint = Color(0xFF059669),
+                        label = "GPS Accuracy",
+                        value = "±${driverLocation?.accuracyMeters?.toInt() ?: 0}m"
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MapToggleOption(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(9.dp),
+        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        modifier = Modifier.clickable(role = Role.Tab, onClick = onClick)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+        )
+    }
+}
+
+@Composable
+private fun TelemetryMetric(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
+    label: String,
+    value: String
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .background(iconTint.copy(alpha = 0.12f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+private fun formatHeading(bearing: Float?): String {
+    if (bearing == null || bearing == 0f) return "--"
+    val normalized = (bearing % 360 + 360) % 360
+    val directions = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+    val index = ((normalized + 22.5) / 45).toInt() % 8
+    return "${normalized.toInt()}° ${directions[index]}"
+}
+
+@Preview(name = "Light Mode", showBackground = true)
+@Preview(name = "Dark Mode", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true)
+@Composable
+private fun LiveMapScreenPreview() {
+    MaterialTheme {
+        LiveMapScreen(
+            driverLocation = DriverLocationData(
+                latitude = 12.9784,
+                longitude = 77.6408,
+                speedKmh = 34f,
+                bearing = 135f,
+                accuracyMeters = 4f
+            ),
+            isServiceRunning = true,
+            onBack = {}
+        )
     }
 }

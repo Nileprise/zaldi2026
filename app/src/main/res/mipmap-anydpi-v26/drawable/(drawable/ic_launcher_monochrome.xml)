@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 
+      Strictly flat, single-path silhouette for Material You.
+      No overlapping transparencies, no shadows, no secondary colors.
+      Android will dynamically tint this black path based on the user's wallpaper.
+    -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="
+            M26,38 h32 v26 h-32 z 
+            M60,44 h10 l8,10 v10 h-18 z 
+            M36,65 m-6,0 a6,6 0 1,1 12,0 a6,6 0 1,1 -12,0 
+            M68,65 m-6,0 a6,6 0 1,1 12,0 a6,6 0 1,1 -12,0" />
+            
+</vector>

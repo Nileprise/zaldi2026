@@ -2,8 +2,11 @@ package com.example.ui.components
 
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,29 +23,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAlert
 import androidx.compose.material.icons.filled.AutoMode
-import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.ElectricRickshaw
-import androidx.compose.material.icons.filled.LocalShipping
-import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,30 +49,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.data.model.BookingOrder
+import com.example.data.model.DriverAvailability
 import com.example.data.model.DriverKyc
-import com.example.ui.theme.AmberContainer
-import com.example.ui.theme.AmberPrimary
-import com.example.ui.theme.BorderLight
-import com.example.ui.theme.ErrorContainer
-import com.example.ui.theme.ErrorRed
-import com.example.ui.theme.LogisticsBlue
-import com.example.ui.theme.LogisticsBlueContainer
-import com.example.ui.theme.SuccessContainer
-import com.example.ui.theme.SuccessGreen
-import com.example.ui.theme.SurfaceCard
-import com.example.ui.theme.SurfaceLight
-import com.example.ui.theme.SurfaceTertiary
-import com.example.ui.theme.TextDark
-import com.example.ui.theme.TextMuted
-import com.example.ui.theme.WarningAmber
+import com.example.data.model.KycStatus
+import com.example.data.model.OrderStatus
+import com.example.ui.theme.*
 
 enum class DriverAvailabilityFilter(val label: String) {
     ALL("All Drivers"),
@@ -92,7 +76,7 @@ fun DriverManagementHub(
     allOrders: List<BookingOrder>,
     onAssignDriver: (BookingOrder, DriverKyc, Context) -> Unit,
     onUnassignDriver: (String, String) -> Unit,
-    onSetDriverAvailability: (String, String) -> Unit,
+    onSetDriverAvailability: (String, DriverAvailability) -> Unit,
     onAutoDispatch: (Context) -> Unit,
     onSendTestNotification: (Context) -> Unit,
     modifier: Modifier = Modifier
@@ -102,9 +86,12 @@ fun DriverManagementHub(
     var selectedOrderForAssignment by remember { mutableStateOf<BookingOrder?>(null) }
     var notificationFeedbackMessage by remember { mutableStateOf<String?>(null) }
 
-    val availableDrivers = drivers.filter { it.status == "APPROVED" && (it.availabilityStatus == "AVAILABLE" || it.availabilityStatus == "Available") }
-    val busyDrivers = drivers.filter { it.availabilityStatus in listOf("BUSY", "IN_TRANSIT", "In Transit", "ON_TRIP") }
-    val offlineDrivers = drivers.filter { it.availabilityStatus in listOf("OFFLINE", "OFF_DUTY", "Off Duty") }
+    // Enforce strict Type Safety using Domain Enums instead of raw strings
+    val availableDrivers = drivers.filter { 
+        it.status == KycStatus.APPROVED && it.availabilityStatus == DriverAvailability.AVAILABLE 
+    }
+    val busyDrivers = drivers.filter { it.availabilityStatus == DriverAvailability.BUSY }
+    val offlineDrivers = drivers.filter { it.availabilityStatus == DriverAvailability.OFFLINE }
 
     val filteredDrivers = when (selectedFilter) {
         DriverAvailabilityFilter.ALL -> drivers
@@ -114,60 +101,66 @@ fun DriverManagementHub(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // Notification Alert Feedback Banner
-        notificationFeedbackMessage?.let { msg ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp)
-                    .testTag("notification_feedback_card"),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = SuccessContainer)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        // Smoothly animated feedback banner
+        AnimatedVisibility(
+            visible = notificationFeedbackMessage != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            notificationFeedbackMessage?.let { msg ->
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .testTag("notification_feedback_card"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.elevatedCardColors(containerColor = SuccessContainer)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.NotificationsActive,
-                        contentDescription = "Alert",
-                        tint = SuccessGreen,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = msg,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = SuccessGreen,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(
-                        onClick = { notificationFeedbackMessage = null },
-                        modifier = Modifier.size(24.dp)
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Dismiss",
+                            imageVector = Icons.Default.NotificationsActive,
+                            contentDescription = "Success Alert",
                             tint = SuccessGreen,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = msg,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = SuccessGreen,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { notificationFeedbackMessage = null },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Dismiss Alert",
+                                tint = SuccessGreen,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             }
         }
 
         // Action Toolbar & Stats Bar
-        Card(
+        ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 14.dp)
                 .testTag("driver_dispatch_header_card"),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.elevatedCardColors(containerColor = SurfaceCard),
+            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -175,43 +168,41 @@ fun DriverManagementHub(
                 ) {
                     Column {
                         Text(
-                            text = "ROOM DATABASE DISPATCHER",
-                            fontSize = 10.sp,
+                            text = "DISPATCH CONTROLLER",
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 1.1.sp,
-                            color = AmberPrimary
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "Active Driver Fleet & Requests",
-                            fontSize = 17.sp,
+                            text = "Active Fleet Overview",
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextDark
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
-                    // Auto dispatch action
                     Button(
                         onClick = {
                             onAutoDispatch(context)
                             notificationFeedbackMessage = "Auto-dispatched pending orders & fired driver push notifications!"
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = AmberPrimary),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.testTag("auto_dispatch_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.AutoMode,
-                            contentDescription = "Auto Match",
+                            contentDescription = "Auto Match Drivers",
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Auto-Match", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Auto-Match", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Quick Fleet Stat Chips
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -238,7 +229,7 @@ fun DriverManagementHub(
                         modifier = Modifier.weight(1f)
                     )
                     StatusSummaryPill(
-                        label = "Pending Orders",
+                        label = "Pending",
                         count = pendingOrders.size,
                         color = WarningAmber,
                         bgColor = AmberContainer,
@@ -246,9 +237,8 @@ fun DriverManagementHub(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Test Local Notification Button
                 OutlinedButton(
                     onClick = {
                         onSendTestNotification(context)
@@ -262,15 +252,15 @@ fun DriverManagementHub(
                     Icon(
                         imageVector = Icons.Default.AddAlert,
                         contentDescription = "Test Notification",
-                        tint = AmberPrimary,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        "Test Local Notification Alert (Heads-up & Vibration)",
-                        fontSize = 12.sp,
+                        "Test Local Notification Alert",
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = AmberPrimary
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -280,37 +270,37 @@ fun DriverManagementHub(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 6.dp),
+                .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(8.dp).background(WarningAmber, CircleShape))
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Pending Delivery Requests (${pendingOrders.size})",
-                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = TextDark
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             Text(
-                text = "Awaiting Driver Mapping",
-                fontSize = 11.sp,
-                color = TextMuted
+                text = "Awaiting Mapping",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
         if (pendingOrders.isEmpty()) {
-            Card(
+            OutlinedCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 6.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = SuccessContainer.copy(alpha = 0.5f))
+                colors = CardDefaults.outlinedCardColors(containerColor = SuccessContainer.copy(alpha = 0.3f))
             ) {
                 Row(
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -319,18 +309,18 @@ fun DriverManagementHub(
                         tint = SuccessGreen,
                         modifier = Modifier.size(24.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
                             text = "All delivery requests currently mapped!",
-                            fontSize = 13.sp,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextDark
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "New customer bookings will appear here instantly via Room Database Flow.",
-                            fontSize = 11.sp,
-                            color = TextMuted
+                            text = "New bookings will appear here instantly.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -340,15 +330,13 @@ fun DriverManagementHub(
                 PendingOrderMappingCard(
                     order = order,
                     availableDrivers = availableDrivers,
-                    onAssignClick = {
-                        selectedOrderForAssignment = order
-                    }
+                    onAssignClick = { selectedOrderForAssignment = order }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // DRIVER AVAILABILITY & FLEET SECTION
         Row(
@@ -358,41 +346,40 @@ fun DriverManagementHub(
         ) {
             Text(
                 text = "Driver Fleet & Availability Status",
-                fontSize = 15.sp,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = TextDark
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = "${filteredDrivers.size} drivers",
-                fontSize = 12.sp,
-                color = TextMuted
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Availability Filter Chips
+        // Modern Kotlin 1.9+ entries property
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            DriverAvailabilityFilter.values().forEach { filter ->
+            DriverAvailabilityFilter.entries.forEach { filter ->
                 FilterChip(
                     selected = selectedFilter == filter,
                     onClick = { selectedFilter = filter },
-                    label = { Text(filter.label, fontSize = 11.sp) },
+                    label = { Text(filter.label, style = MaterialTheme.typography.labelSmall) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = AmberPrimary,
-                        selectedLabelColor = Color.White
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                     ),
                     modifier = Modifier.testTag("filter_chip_${filter.name}")
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Driver List Cards
         filteredDrivers.forEach { driver ->
             val mappedOrder = allOrders.find { it.id == driver.assignedOrderId }
 
@@ -409,32 +396,32 @@ fun DriverManagementHub(
                 },
                 onAssignPendingOrder = { order ->
                     onAssignDriver(order, driver, context)
-                    notificationFeedbackMessage = "Assigned ${driver.name} to #${order.id} & alerted driver via local notification!"
+                    notificationFeedbackMessage = "Assigned ${driver.name} to #${order.id} & alerted driver!"
                 }
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 
-    // Modal Dialog to Select Driver for a Pending Order
+    // Modal Dialog to Select Driver
     selectedOrderForAssignment?.let { order ->
         AlertDialog(
             onDismissRequest = { selectedOrderForAssignment = null },
             title = {
                 Text(
                     text = "Map Driver to Order #${order.id}",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Column {
                     Text(
-                        text = "Select an available driver partner from the Room database. The driver will immediately receive a high-priority local notification with sound & vibration.",
-                        fontSize = 12.sp,
-                        color = TextMuted
+                        text = "Select an available driver partner. They will immediately receive a high-priority push notification.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     if (availableDrivers.isEmpty()) {
                         Surface(
@@ -443,43 +430,41 @@ fun DriverManagementHub(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = "⚠️ No approved drivers currently in 'AVAILABLE' status. Change a driver's status below or set one to Available.",
-                                fontSize = 11.sp,
-                                color = AmberPrimary,
-                                modifier = Modifier.padding(10.dp)
+                                text = "⚠️ No approved drivers currently in 'AVAILABLE' status.",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = WarningAmber,
+                                modifier = Modifier.padding(12.dp)
                             )
                         }
                     } else {
                         availableDrivers.forEach { driver ->
-                            Card(
+                            OutlinedCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
-                                    .clickable {
+                                    .clickable(role = Role.Button) {
                                         onAssignDriver(order, driver, context)
-                                        notificationFeedbackMessage = "Assigned ${driver.name} to #${order.id} & fired push notification!"
+                                        notificationFeedbackMessage = "Assigned ${driver.name} to #${order.id}"
                                         selectedOrderForAssignment = null
                                     },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderLight)
+                                shape = RoundedCornerShape(10.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(10.dp),
+                                    modifier = Modifier.padding(12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Column {
-                                        Text(driver.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextDark)
-                                        Text("${driver.vehicleTier} • ${driver.vehicleNumber}", fontSize = 11.sp, color = TextMuted)
+                                        Text(driver.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        Text("${driver.vehicleTier} • ${driver.vehicleNumber}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
                                         color = SuccessContainer
                                     ) {
                                         Text(
-                                            "Assign & Alert",
-                                            fontSize = 11.sp,
+                                            "Assign",
+                                            style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = SuccessGreen,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -493,7 +478,7 @@ fun DriverManagementHub(
             },
             confirmButton = {
                 TextButton(onClick = { selectedOrderForAssignment = null }) {
-                    Text("Cancel", color = TextMuted)
+                    Text("Cancel")
                 }
             }
         )
@@ -510,22 +495,22 @@ private fun StatusSummaryPill(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(12.dp),
         color = bgColor
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = count.toString(),
-                fontSize = 16.sp,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Black,
                 color = color
             )
             Text(
                 text = label,
-                fontSize = 9.sp,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = color,
                 maxLines = 1
@@ -540,15 +525,15 @@ private fun PendingOrderMappingCard(
     availableDrivers: List<DriverKyc>,
     onAssignClick: () -> Unit
 ) {
-    Card(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("pending_order_card_${order.id}"),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.elevatedCardColors(containerColor = SurfaceCard),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -561,16 +546,16 @@ private fun PendingOrderMappingCard(
                     ) {
                         Text(
                             text = order.id,
-                            fontSize = 11.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.ExtraBold,
-                            color = AmberPrimary,
+                            color = WarningAmber,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "UNASSIGNED",
-                        fontSize = 10.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = WarningAmber
                     )
@@ -578,26 +563,26 @@ private fun PendingOrderMappingCard(
 
                 Text(
                     text = "₹${order.fare.toInt()}",
-                    fontSize = 16.sp,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Black,
-                    color = TextDark
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = order.goodsType,
-                fontSize = 13.sp,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = TextDark
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Text(
                 text = "${order.pickupAddress.split(",")[0]} → ${order.dropoffAddress.split(",")[0]}",
-                fontSize = 11.sp,
-                color = TextMuted,
-                modifier = Modifier.padding(vertical = 2.dp)
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp)
             )
 
             Row(
@@ -607,7 +592,7 @@ private fun PendingOrderMappingCard(
             ) {
                 Text(
                     text = "Required: ${order.vehicleName} (${order.distanceKm} km)",
-                    fontSize = 11.sp,
+                    style = MaterialTheme.typography.labelMedium,
                     color = LogisticsBlue,
                     fontWeight = FontWeight.Medium
                 )
@@ -620,11 +605,11 @@ private fun PendingOrderMappingCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Person,
-                        contentDescription = "Assign",
-                        modifier = Modifier.size(14.dp)
+                        contentDescription = "Assign Driver",
+                        modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Map Driver", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Map Driver", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -636,7 +621,7 @@ private fun DriverFleetCard(
     driver: DriverKyc,
     mappedOrder: BookingOrder?,
     pendingOrders: List<BookingOrder>,
-    onSetAvailability: (String) -> Unit,
+    onSetAvailability: (DriverAvailability) -> Unit,
     onUnassign: (String) -> Unit,
     onAssignPendingOrder: (BookingOrder) -> Unit
 ) {
@@ -644,95 +629,64 @@ private fun DriverFleetCard(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         DriverAvailabilityCard(
-            driver = driver,
-            mappedOrder = mappedOrder,
-            showStatusControls = true,
-            showContactActions = true,
-            onStatusChange = { newStatus ->
-                val statusStr = when (newStatus) {
-                    DriverAvailabilityStatus.AVAILABLE -> "AVAILABLE"
-                    DriverAvailabilityStatus.IN_TRANSIT -> "IN_TRANSIT"
-                    DriverAvailabilityStatus.OFF_DUTY -> "OFF_DUTY"
+            driverId = driver.driverId,
+            driverName = driver.name,
+            statusText = driver.availabilityStatus.name,
+            onClick = {
+                if (driver.availabilityStatus == DriverAvailability.AVAILABLE && pendingOrders.isNotEmpty()) {
+                    showQuickAssignDropdown = !showQuickAssignDropdown
                 }
-                onSetAvailability(statusStr)
-            },
-            onCallClick = { /* Call action handled */ },
-            onUnassignClick = if (mappedOrder != null) {
-                { onUnassign(mappedOrder.id) }
-            } else null,
-            onAssignClick = if (driver.availabilityStatus in listOf("AVAILABLE", "Available") && pendingOrders.isNotEmpty()) {
-                { showQuickAssignDropdown = !showQuickAssignDropdown }
-            } else null
+            }
         )
 
-        AnimatedVisibility(visible = showQuickAssignDropdown) {
-            Card(
+        AnimatedVisibility(
+            visible = showQuickAssignDropdown,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            OutlinedCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp),
+                    .padding(top = 8.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = AmberContainer.copy(alpha = 0.5f)),
-                border = androidx.compose.foundation.BorderStroke(1.dp, AmberPrimary.copy(alpha = 0.3f))
+                colors = CardDefaults.outlinedCardColors(containerColor = AmberContainer.copy(alpha = 0.3f))
             ) {
-                Column(modifier = Modifier.padding(10.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = "Map ${driver.name} to Pending Request:",
-                        fontSize = 11.sp,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextDark
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
                     pendingOrders.forEach { order ->
-                        Card(
+                        OutlinedCard(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 3.dp)
-                                .clickable {
+                                .padding(vertical = 4.dp)
+                                .clickable(role = Role.Button) {
                                     onAssignPendingOrder(order)
                                     showQuickAssignDropdown = false
                                 },
                             shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(containerColor = SurfaceCard)
+                            colors = CardDefaults.outlinedCardColors(containerColor = SurfaceCard)
                         ) {
                             Row(
-                                modifier = Modifier.padding(8.dp),
+                                modifier = Modifier.padding(10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column {
-                                    Text("#${order.id} • ${order.goodsType}", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    Text("₹${order.fare.toInt()} • ${order.pickupAddress.split(",")[0]} → ${order.dropoffAddress.split(",")[0]}", fontSize = 10.sp, color = TextMuted)
+                                    Text("#${order.id} • ${order.goodsType}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    Text("₹${order.fare.toInt()} • ${order.pickupAddress.split(",")[0]} → ${order.dropoffAddress.split(",")[0]}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Text("Map →", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SuccessGreen)
+                                Text("Map →", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = SuccessGreen)
                             }
                         }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun AvailabilityToggleButton(
-    label: String,
-    isSelected: Boolean,
-    selectedColor: Color,
-    onClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = if (isSelected) selectedColor else SurfaceTertiary,
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .testTag("status_toggle_${label.lowercase()}")
-    ) {
-        Text(
-            text = label,
-            fontSize = 10.sp,
-            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-            color = if (isSelected) Color.White else TextDark,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
     }
 }

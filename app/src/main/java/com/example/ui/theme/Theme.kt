@@ -1,5 +1,6 @@
 package com.example.ui.theme
 
+import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -8,64 +9,76 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
-    primary = AccentBlue,               // Blue for main buttons
+    primary = Blue600,
     onPrimary = Color.White,
-    primaryContainer = AccentBlueContainer,
-    onPrimaryContainer = OnAccentBlueContainer,
+    primaryContainer = Blue50,
+    onPrimaryContainer = Blue900,
     
-    secondary = BrandSlate,             // Slate for secondary elements/headers
+    secondary = Slate500,
     onSecondary = Color.White,
-    secondaryContainer = SurfaceTertiary,
-    onSecondaryContainer = TextDark,
+    secondaryContainer = Slate100,
+    onSecondaryContainer = Slate900,
+
+    background = Slate50,
+    onBackground = Slate900,
     
-    tertiary = BrandSlateDark,
-    onTertiary = Color.White,
+    surface = Color.White,
+    onSurface = Slate900,
     
-    background = SurfaceLight,
-    onBackground = TextDark,
-    surface = SurfaceCard,
-    onSurface = TextDark,
-    surfaceVariant = SurfaceTertiary,
-    onSurfaceVariant = TextMuted,
-    outline = BorderLight,
+    surfaceVariant = Slate100,
+    onSurfaceVariant = Slate500,
     
-    error = ErrorRed,
+    outline = Slate200,
+    outlineVariant = Slate200.copy(alpha = 0.5f),
+    
+    error = Red600,
     onError = Color.White,
-    errorContainer = ErrorContainer,
-    onErrorContainer = ErrorRed
+    errorContainer = Red100,
+    onErrorContainer = Red800
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF3B82F6),        // Lighter blue for dark mode
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF1E3A8A),
-    onPrimaryContainer = Color(0xFFDBEAFE),
+    primary = Blue500,
+    onPrimary = Slate900,
+    primaryContainer = Blue900,
+    onPrimaryContainer = Blue100,
     
-    secondary = Color(0xFF94A3B8),
-    onSecondary = Color(0xFF0F172A),
-    secondaryContainer = Color(0xFF334155),
-    onSecondaryContainer = Color(0xFFF8FAFC),
+    secondary = Slate500,
+    onSecondary = Slate900,
+    secondaryContainer = Slate700,
+    onSecondaryContainer = Slate100,
+
+    background = Slate900,
+    onBackground = Slate50,
     
-    background = Color(0xFF0B0F19),     // Deep dark background
-    onBackground = Color(0xFFF8FAFC),
-    surface = Color(0xFF151E2E),        // Slightly elevated dark surface
-    onSurface = Color(0xFFF8FAFC),
-    surfaceVariant = Color(0xFF1E293B),
-    onSurfaceVariant = Color(0xFF94A3B8),
-    outline = Color(0xFF334155),
+    surface = Slate800,
+    onSurface = Slate50,
     
-    error = Color(0xFFEF4444),
-    onError = Color.White
+    surfaceVariant = Slate700,
+    onSurfaceVariant = Slate200,
+    
+    outline = Slate500,
+    outlineVariant = Slate700,
+    
+    error = Red300,
+    onError = Slate900,
+    errorContainer = Red800,
+    onErrorContainer = Red100
 )
 
 @Composable
-fun MyApplicationTheme(
+fun AkhilLogisticsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // Keep false to maintain corporate identity
+    // Dynamic color is available on Android 12+ (API 31+)
+    dynamicColor: Boolean = false, // Set to true to allow Android to override with wallpaper colors
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -77,9 +90,21 @@ fun MyApplicationTheme(
         else -> LightColorScheme
     }
 
+    // Modern Android Window Inset & Status Bar configuration
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            window.statusBarColor = Color.Transparent.toArgb()
+            window.navigationBarColor = Color.Transparent.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
+        }
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = Typography, // Ensure you have a Typography.kt defined
         content = content
     )
 }

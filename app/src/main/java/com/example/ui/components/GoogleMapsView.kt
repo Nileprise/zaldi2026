@@ -233,11 +233,11 @@ fun GoogleMapsView(
             )
 
             // Route Polyline Glow
-            Polyline(
-                points = activeRouteWaypoints,
-                color = AmberPrimary.copy(alpha = 0.35f),
-                width = 16f
-            )
+Polyline(
+    points = activeRouteWaypoints,
+    color = AccentBlue.copy(alpha = 0.25f), // Replaced AmberPrimary
+    width = 16f
+)
 
             // Main Route Polyline
             Polyline(

@@ -1,23 +1,20 @@
 package com.example.ui.components
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,59 +23,28 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Draw
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material.icons.filled.Image as ImageIcon
+import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import android.graphics.ImageDecoder
-import android.os.Build
-import android.provider.MediaStore
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.data.model.BookingOrder
-import com.example.ui.theme.AmberContainer
-import com.example.ui.theme.AmberPrimary
-import com.example.ui.theme.BorderLight
-import com.example.ui.theme.LogisticsBlue
-import com.example.ui.theme.LogisticsBlueContainer
-import com.example.ui.theme.SuccessContainer
-import com.example.ui.theme.SuccessGreen
-import com.example.ui.theme.SurfaceCard
-import com.example.ui.theme.SurfaceLight
-import com.example.ui.theme.SurfaceTertiary
-import com.example.ui.theme.TextDark
-import com.example.ui.theme.TextMuted
+import kotlinx.coroutines.launch
 
 enum class ProofOfDeliveryMode {
     SIGNATURE,
@@ -92,45 +58,37 @@ fun ProofOfDeliveryDialog(
     onConfirmDelivery: (signaturePointsCount: Int, photoUri: String?) -> Unit
 ) {
     var selectedMode by remember { mutableStateOf(ProofOfDeliveryMode.SIGNATURE) }
-    val signaturePaths = remember { mutableStateListOf<List<Offset>>() }
-    var currentPath by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    
+    // State hoisted from the SignaturePad to track validity
+    var signaturePointsCount by remember { mutableIntStateOf(0) }
+    
+    // Photo State
     var capturedPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     val context = LocalContext.current
+
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
-        if (uri != null) {
-            capturedPhotoUri = uri
-            try {
-                capturedBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
-                } else {
-                    @Suppress("DEPRECATION")
-                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-                }
-            } catch (e: Exception) {
-                // Keep capturedPhotoUri recorded
-            }
+        uri?.let {
+            capturedPhotoUri = it
+            capturedBitmap = loadBitmapSafe(context, it)
         }
     }
 
-    // Camera launcher contract for on-the-spot delivery snap
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap: Bitmap? ->
-        if (bitmap != null) {
-            capturedBitmap = bitmap
+        bitmap?.let {
+            capturedBitmap = it
             capturedPhotoUri = null
         }
     }
 
-    val hasSignature = signaturePaths.isNotEmpty() || currentPath.isNotEmpty()
-    val hasPhoto = capturedPhotoUri != null || capturedBitmap != null
     val isProofProvided = when (selectedMode) {
-        ProofOfDeliveryMode.SIGNATURE -> hasSignature
-        ProofOfDeliveryMode.PHOTO -> hasPhoto
+        ProofOfDeliveryMode.SIGNATURE -> signaturePointsCount > 10 // Require a meaningful stroke
+        ProofOfDeliveryMode.PHOTO -> capturedPhotoUri != null || capturedBitmap != null
     }
 
     AlertDialog(
@@ -140,69 +98,23 @@ fun ProofOfDeliveryDialog(
             .testTag("proof_of_delivery_dialog"),
         shape = RoundedCornerShape(24.dp),
         title = {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = CircleShape,
-                            color = LogisticsBlueContainer,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = if (selectedMode == ProofOfDeliveryMode.SIGNATURE) Icons.Default.Draw else Icons.Default.CameraAlt,
-                                    contentDescription = null,
-                                    tint = LogisticsBlue,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "Proof of Delivery (POD)",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextDark
-                            )
-                            Text(
-                                text = "Order: ${order.id}",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextMuted
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = SuccessContainer
-                    ) {
-                        Text(
-                            text = "₹${order.fare.toInt()}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Black,
-                            color = SuccessGreen,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Mode Tabs: Signature vs Photo
+            DialogHeader(
+                orderId = order.id,
+                fare = order.fare,
+                selectedMode = selectedMode
+            )
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Mode Selection Tabs
                 TabRow(
                     selectedTabIndex = selectedMode.ordinal,
-                    containerColor = SurfaceTertiary,
-                    contentColor = LogisticsBlue,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.primary,
                     indicator = { tabPositions ->
                         TabRowDefaults.SecondaryIndicator(
                             Modifier.tabIndicatorOffset(tabPositions[selectedMode.ordinal]),
-                            color = LogisticsBlue
+                            color = MaterialTheme.colorScheme.primary
                         )
                     },
                     modifier = Modifier
@@ -215,411 +127,112 @@ fun ProofOfDeliveryDialog(
                         onClick = { selectedMode = ProofOfDeliveryMode.SIGNATURE },
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Draw,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                                Icon(Icons.Default.Draw, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Customer Signature", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Signature", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                             }
-                        },
-                        modifier = Modifier.testTag("pod_tab_signature")
+                        }
                     )
-
                     Tab(
                         selected = selectedMode == ProofOfDeliveryMode.PHOTO,
                         onClick = { selectedMode = ProofOfDeliveryMode.PHOTO },
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.CameraAlt,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                                Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Parcel Photo", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Photo", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                             }
-                        },
-                        modifier = Modifier.testTag("pod_tab_photo")
+                        }
                     )
                 }
-            }
-        },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // Dropoff recipient address reminder
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Recipient Info Banner
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = SurfaceLight,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderLight),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(10.dp),
+                        modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(SuccessGreen, CircleShape)
+                                .background(MaterialTheme.colorScheme.tertiary, CircleShape)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
                                 text = "Recipient: ${order.customerName}",
-                                fontSize = 11.sp,
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = TextDark
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = order.dropoffAddress,
-                                fontSize = 10.sp,
-                                color = TextMuted,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
+                // Content Area
                 when (selectedMode) {
                     ProofOfDeliveryMode.SIGNATURE -> {
                         Text(
-                            text = "Ask recipient to sign within the box below:",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = TextDark
+                            text = "Customer Signature Required:",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-
                         Spacer(modifier = Modifier.height(8.dp))
-
-                        // Signature Drawing Canvas
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White)
-                                .border(1.dp, if (hasSignature) LogisticsBlue else BorderLight, RoundedCornerShape(12.dp))
-                                .testTag("pod_signature_canvas")
-                        ) {
-                            Canvas(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(160.dp)
-                                    .pointerInput(Unit) {
-                                        detectDragGestures(
-                                            onDragStart = { offset ->
-                                                currentPath = listOf(offset)
-                                            },
-                                            onDrag = { change, dragAmount ->
-                                                change.consume()
-                                                val newOffset = change.position
-                                                currentPath = currentPath + newOffset
-                                            },
-                                            onDragEnd = {
-                                                if (currentPath.isNotEmpty()) {
-                                                    signaturePaths.add(currentPath)
-                                                    currentPath = emptyList()
-                                                }
-                                            }
-                                        )
-                                    }
-                            ) {
-                                // Draw baseline guide
-                                drawLine(
-                                    color = Color.LightGray.copy(alpha = 0.5f),
-                                    start = Offset(20f, size.height * 0.75f),
-                                    end = Offset(size.width - 20f, size.height * 0.75f),
-                                    strokeWidth = 2f
-                                )
-
-                                // Draw completed paths
-                                for (pathPoints in signaturePaths) {
-                                    if (pathPoints.size > 1) {
-                                        val p = Path()
-                                        p.moveTo(pathPoints.first().x, pathPoints.first().y)
-                                        for (i in 1 until pathPoints.size) {
-                                            p.lineTo(pathPoints[i].x, pathPoints[i].y)
-                                        }
-                                        drawPath(
-                                            path = p,
-                                            color = Color(0xFF1E293B),
-                                            style = Stroke(
-                                                width = 6f,
-                                                cap = StrokeCap.Round,
-                                                join = StrokeJoin.Round
-                                            )
-                                        )
-                                    }
-                                }
-
-                                // Draw ongoing path
-                                if (currentPath.size > 1) {
-                                    val p = Path()
-                                    p.moveTo(currentPath.first().x, currentPath.first().y)
-                                    for (i in 1 until currentPath.size) {
-                                        p.lineTo(currentPath[i].x, currentPath[i].y)
-                                    }
-                                    drawPath(
-                                        path = p,
-                                        color = Color(0xFF1E293B),
-                                        style = Stroke(
-                                            width = 6f,
-                                            cap = StrokeCap.Round,
-                                            join = StrokeJoin.Round
-                                        )
-                                    )
-                                }
-                            }
-
-                            if (!hasSignature) {
-                                Text(
-                                    text = "✍ Sign here with finger or stylus",
-                                    fontSize = 12.sp,
-                                    color = TextMuted.copy(alpha = 0.6f),
-                                    modifier = Modifier
-                                        .align(Alignment.Center)
-                                )
-                            } else {
-                                TextButton(
-                                    onClick = {
-                                        signaturePaths.clear()
-                                        currentPath = emptyList()
-                                    },
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(4.dp)
-                                        .testTag("pod_clear_signature_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Clear,
-                                        contentDescription = "Clear",
-                                        tint = Color.Red,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(2.dp))
-                                    Text("Clear", fontSize = 11.sp, color = Color.Red)
-                                }
-                            }
-                        }
+                        
+                        // Isolated recomposition component
+                        SignaturePad(
+                            onPointsUpdated = { count -> signaturePointsCount = count }
+                        )
                     }
 
                     ProofOfDeliveryMode.PHOTO -> {
                         Text(
-                            text = "Take a photo of the delivered goods at destination:",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = TextDark
+                            text = "Parcel Delivery Photo Required:",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        if (hasPhoto) {
-                            // Show preview
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(160.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(SurfaceTertiary)
-                                    .border(1.dp, SuccessGreen, RoundedCornerShape(12.dp))
-                                    .testTag("pod_photo_preview")
-                            ) {
-                                if (capturedBitmap != null) {
-                                    androidx.compose.foundation.Image(
-                                        bitmap = capturedBitmap!!.asImageBitmap(),
-                                        contentDescription = "Captured Delivery Proof",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(160.dp)
-                                            .clip(RoundedCornerShape(12.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        PhotoPickerArea(
+                            capturedBitmap = capturedBitmap,
+                            onLaunchCamera = {
+                                try {
+                                    cameraLauncher.launch(null)
+                                } catch (e: Exception) {
+                                    photoPickerLauncher.launch(
+                                        androidx.activity.result.PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                                        )
                                     )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(160.dp)
-                                            .background(SurfaceTertiary),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Icon(
-                                                imageVector = Icons.Default.CheckCircle,
-                                                contentDescription = null,
-                                                tint = SuccessGreen,
-                                                modifier = Modifier.size(36.dp)
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = "Photo Selected Successfully",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = TextDark
-                                            )
-                                        }
-                                    }
                                 }
-
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = SuccessGreen,
-                                    modifier = Modifier
-                                        .align(Alignment.BottomStart)
-                                        .padding(8.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CheckCircle,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Photo Captured", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                    }
-                                }
-
-                                TextButton(
-                                    onClick = {
-                                        capturedBitmap = null
-                                        capturedPhotoUri = null
-                                    },
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(4.dp)
-                                        .testTag("pod_retake_photo_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Clear,
-                                        contentDescription = "Remove",
-                                        tint = Color.Red,
-                                        modifier = Modifier.size(14.dp)
+                            },
+                            onLaunchGallery = {
+                                photoPickerLauncher.launch(
+                                    androidx.activity.result.PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageOnly
                                     )
-                                    Spacer(modifier = Modifier.width(2.dp))
-                                    Text("Retake", fontSize = 11.sp, color = Color.Red)
-                                }
+                                )
+                            },
+                            onClearPhoto = {
+                                capturedBitmap = null
+                                capturedPhotoUri = null
                             }
-                        } else {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                // Camera snap button
-                                Card(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(140.dp)
-                                        .testTag("pod_camera_button"),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = CardDefaults.cardColors(containerColor = LogisticsBlueContainer),
-                                    onClick = {
-                                        try {
-                                            cameraLauncher.launch(null)
-                                        } catch (e: Exception) {
-                                            // Fallback to media picker if direct camera preview unavailable
-                                            photoPickerLauncher.launch(
-                                                androidx.activity.result.PickVisualMediaRequest(
-                                                    ActivityResultContracts.PickVisualMedia.ImageOnly
-                                                )
-                                            )
-                                        }
-                                    }
-                                ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(14.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = LogisticsBlue,
-                                            modifier = Modifier.size(42.dp)
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(
-                                                    imageVector = Icons.Default.CameraAlt,
-                                                    contentDescription = "Take Photo",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(22.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = "Take Photo",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp,
-                                            color = LogisticsBlue
-                                        )
-                                        Text(
-                                            text = "Camera snap",
-                                            fontSize = 10.sp,
-                                            color = TextMuted
-                                        )
-                                    }
-                                }
-
-                                // Photo gallery picker (Zero permission Android Photo Picker)
-                                Card(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(140.dp)
-                                        .testTag("pod_gallery_button"),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = CardDefaults.cardColors(containerColor = AmberContainer),
-                                    onClick = {
-                                        photoPickerLauncher.launch(
-                                            androidx.activity.result.PickVisualMediaRequest(
-                                                ActivityResultContracts.PickVisualMedia.ImageOnly
-                                            )
-                                        )
-                                    }
-                                ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(14.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = AmberPrimary,
-                                            modifier = Modifier.size(42.dp)
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Image,
-                                                    contentDescription = "Choose from Gallery",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(22.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = "Pick Image",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp,
-                                            color = AmberPrimary
-                                        )
-                                        Text(
-                                            text = "Photo library",
-                                            fontSize = 10.sp,
-                                            color = TextMuted
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        )
                     }
                 }
             }
@@ -627,39 +240,292 @@ fun ProofOfDeliveryDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val pointsCount = signaturePaths.sumOf { it.size }
-                    val photoStr = capturedPhotoUri?.toString() ?: (if (capturedBitmap != null) "camera_bitmap_proof" else null)
-                    onConfirmDelivery(pointsCount, photoStr)
+                    val photoStr = capturedPhotoUri?.toString() 
+                        ?: (if (capturedBitmap != null) "camera_bitmap_proof" else null)
+                    onConfirmDelivery(signaturePointsCount, photoStr)
                 },
                 enabled = isProofProvided,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = SuccessGreen,
-                    disabledContainerColor = SuccessGreen.copy(alpha = 0.4f)
+                    containerColor = MaterialTheme.colorScheme.primary
                 ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.testTag("pod_confirm_delivery_button")
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Confirm & Complete",
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Confirm Delivery", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.testTag("pod_cancel_button")
-            ) {
-                Text("Cancel", color = TextMuted)
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
             }
         }
     )
+}
+
+// ============================================================================
+// Extracted Sub-Components for Performance and Clarity
+// ============================================================================
+
+@Composable
+private fun DialogHeader(orderId: String, fare: Double, selectedMode: ProofOfDeliveryMode) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (selectedMode == ProofOfDeliveryMode.SIGNATURE) Icons.Default.Draw else Icons.Default.CameraAlt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = "Proof of Delivery",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Order #$orderId",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Isolated Signature Pad. 
+ * Prevents the entire dialog from recomposing during fast drag gestures.
+ */
+@Composable
+private fun SignaturePad(
+    onPointsUpdated: (Int) -> Unit
+) {
+    val signaturePaths = remember { mutableStateListOf<List<Offset>>() }
+    var currentPath by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    
+    val hasSignature = signaturePaths.isNotEmpty() || currentPath.isNotEmpty()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(160.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(
+                width = 1.dp, 
+                color = if (hasSignature) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, 
+                shape = RoundedCornerShape(12.dp)
+            )
+    ) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            currentPath = listOf(offset)
+                        },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            currentPath = currentPath + change.position
+                        },
+                        onDragEnd = {
+                            if (currentPath.isNotEmpty()) {
+                                signaturePaths.add(currentPath)
+                                currentPath = emptyList()
+                                onPointsUpdated(signaturePaths.sumOf { it.size })
+                            }
+                        }
+                    )
+                }
+        ) {
+            // Draw baseline guide
+            drawLine(
+                color = Color.LightGray.copy(alpha = 0.5f),
+                start = Offset(20f, size.height * 0.75f),
+                end = Offset(size.width - 20f, size.height * 0.75f),
+                strokeWidth = 2f
+            )
+
+            // Draw completed paths
+            for (pathPoints in signaturePaths) {
+                drawPathSegment(pathPoints)
+            }
+
+            // Draw ongoing path
+            if (currentPath.isNotEmpty()) {
+                drawPathSegment(currentPath)
+            }
+        }
+
+        if (!hasSignature) {
+            Text(
+                text = "✍ Sign here",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.align(Alignment.Center)
+            )
+        } else {
+            TextButton(
+                onClick = {
+                    signaturePaths.clear()
+                    currentPath = emptyList()
+                    onPointsUpdated(0)
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+            ) {
+                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Clear", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPathSegment(points: List<Offset>) {
+    if (points.size > 1) {
+        val p = Path().apply {
+            moveTo(points.first().x, points.first().y)
+            for (i in 1 until points.size) {
+                lineTo(points[i].x, points[i].y)
+            }
+        }
+        drawPath(
+            path = p,
+            color = Color(0xFF1E293B), // Dark ink color regardless of theme
+            style = Stroke(width = 6f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+    }
+}
+
+@Composable
+private fun PhotoPickerArea(
+    capturedBitmap: Bitmap?,
+    onLaunchCamera: () -> Unit,
+    onLaunchGallery: () -> Unit,
+    onClearPhoto: () -> Unit
+) {
+    if (capturedBitmap != null) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+        ) {
+            Image(
+                bitmap = capturedBitmap.asImageBitmap(),
+                contentDescription = "Captured Delivery Proof",
+                modifier = Modifier.fillMaxSize()
+            )
+
+            TextButton(
+                onClick = onClearPhoto,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+            ) {
+                Icon(Icons.Default.Clear, contentDescription = "Retake", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Retake", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SelectionCard(
+                modifier = Modifier.weight(1f),
+                title = "Take Photo",
+                subtitle = "Camera",
+                icon = Icons.Default.CameraAlt,
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                onClick = onLaunchCamera
+            )
+
+            SelectionCard(
+                modifier = Modifier.weight(1f),
+                title = "Pick Image",
+                subtitle = "Gallery",
+                icon = Icons.Default.ImageIcon,
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                onClick = onLaunchGallery
+            )
+        }
+    }
+}
+
+@Composable
+private fun SelectionCard(
+    modifier: Modifier,
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    containerColor: Color,
+    contentColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier
+            .height(120.dp)
+            .clickable(role = Role.Button) { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = contentColor,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = title, tint = containerColor, modifier = Modifier.size(20.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = contentColor)
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = contentColor.copy(alpha = 0.8f))
+        }
+    }
+}
+
+// Helper to safely load bitmaps across Android versions
+private fun loadBitmapSafe(context: Context, uri: Uri): Bitmap? {
+    return try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
+        } else {
+            @Suppress("DEPRECATION")
+            MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+        }
+    } catch (e: Exception) {
+        null
+    }
 }

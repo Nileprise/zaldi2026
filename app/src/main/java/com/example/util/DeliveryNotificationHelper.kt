@@ -1,5 +1,6 @@
 package com.example.util
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -15,14 +16,31 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.MainActivity
 import com.example.data.model.BookingOrder
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object DeliveryNotificationHelper {
+/**
+ * Modernized Notification Manager designed for Dependency Injection.
+ * 
+ * Usage in ViewModel/Repository:
+ * @Inject constructor(private val notificationManager: DeliveryNotificationManager)
+ */
+@Singleton
+class DeliveryNotificationManager @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    companion object {
+        const val CHANNEL_ID = "driver_delivery_assignments_channel"
+        private const val CHANNEL_NAME = "Driver Order Assignments"
+        private const val CHANNEL_DESCRIPTION = "Real-time alerts for assigned freight and delivery requests"
+    }
 
-    const val CHANNEL_ID = "driver_delivery_assignments_channel"
-    private const val CHANNEL_NAME = "Driver Order Assignments"
-    private const val CHANNEL_DESCRIPTION = "Real-time alerts for assigned freight and delivery requests"
+    init {
+        createNotificationChannel()
+    }
 
-    fun initNotificationChannel(context: Context) {
+    private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -39,22 +57,16 @@ object DeliveryNotificationHelper {
         }
     }
 
-    fun notifyDriverAssignment(
-        context: Context,
-        order: BookingOrder,
-        driverName: String
-    ) {
-        initNotificationChannel(context)
-
+    fun notifyDriverAssignment(order: BookingOrder, driverName: String) {
         // Check POST_NOTIFICATIONS permission on Android 13+ (TIRAMISU)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val hasPermission = ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.POST_NOTIFICATIONS
+                context, Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
+            
             if (!hasPermission) {
-                // If notification permission not granted, trigger vibration fallback
-                triggerHapticFeedback(context)
+                // Fallback to haptic feedback if UI notifications were disabled by the user
+                triggerHapticFeedback()
                 return
             }
         }
@@ -74,47 +86,51 @@ object DeliveryNotificationHelper {
 
         val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
+        // Safe address parsing prevents out-of-bounds crashes
+        val shortPickup = order.pickupAddress.split(",").firstOrNull()?.trim() ?: "Unknown Origin"
+        val shortDropoff = order.dropoffAddress.split(",").firstOrNull()?.trim() ?: "Unknown Destination"
+
         val bigText = buildString {
             append("📦 Cargo: ${order.goodsType}\n")
-            append("📍 Pickup: ${order.pickupAddress.split(",")[0].trim()}\n")
-            append("🎯 Drop-off: ${order.dropoffAddress.split(",")[0].trim()}\n")
-            append("💰 Earnings / Fare: ₹${order.fare.toInt()} (${order.distanceKm} km)\n")
+            append("📍 Pickup: $shortPickup\n")
+            append("🎯 Drop-off: $shortDropoff\n")
+            append("💰 Earnings: ₹${order.fare.toInt()} (${order.distanceKm} km)\n")
             append("🚚 Vehicle: ${order.vehicleName}\n")
             append("🔑 Start OTP: ${order.startOtp}")
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_notify_chat)
-            .setContentTitle("🚚 New Delivery Assigned: $driverName")
-            .setContentText("Order #${order.id} • ${order.goodsType} (₹${order.fare.toInt()})")
+            // Note: Replace android.R.drawable.ic_dialog_info with your app's custom R.drawable.ic_notification
+            .setSmallIcon(android.R.drawable.ic_dialog_info) 
+            .setContentTitle("🚚 New Delivery: $driverName")
+            .setContentText("Order #${order.id} • ₹${order.fare.toInt()}")
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText(bigText)
-                    .setBigContentTitle("🚚 New Delivery Assigned: $driverName")
-                    .setSummaryText("Order #${order.id} • Assigned")
+                    .setSummaryText("New Freight Assignment")
             )
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setCategory(NotificationCompat.CATEGORY_EVENT) // CATEGORY_EVENT is safer than MESSAGE without a Person object
             .setSound(soundUri)
             .setVibrate(longArrayOf(0, 300, 200, 300))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .addAction(
                 android.R.drawable.ic_menu_directions,
-                "Accept / View Route",
+                "Accept & View Route",
                 pendingIntent
             )
             .build()
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-        val notificationId = (order.id.hashCode() and 0x7FFFFFFF)
+        val notificationId = order.id.hashCode() and 0x7FFFFFFF // Ensure positive integer for ID
         manager?.notify(notificationId, notification)
 
         // Trigger physical vibration
-        triggerHapticFeedback(context)
+        triggerHapticFeedback()
     }
 
-    private fun triggerHapticFeedback(context: Context) {
+    private fun triggerHapticFeedback() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
@@ -139,7 +155,7 @@ object DeliveryNotificationHelper {
                 }
             }
         } catch (_: Exception) {
-            // Ignore if vibration fails on emulator/container
+            // Silently ignore if vibration fails (e.g., running on an emulator or device without a motor)
         }
     }
 }

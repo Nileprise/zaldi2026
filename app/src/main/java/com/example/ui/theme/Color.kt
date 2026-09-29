@@ -2,58 +2,22 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ============================================================================
-// Raw Color Primitives
-// Define the absolute color values here. Do not use these directly in UI components.
-// ============================================================================
+val AmberPrimary = Color(0xFFF59E0B)
+val AmberSecondary = Color(0xFFD97706)
+val AmberDark = Color(0xFFB45309)
 
-// Brand: Electric Blue
-val Blue50 = Color(0xFFEFF6FF)   // AccentBlueContainer (Light)
-val Blue100 = Color(0xFFDBEAFE)
-val Blue500 = Color(0xFF3B82F6)  // Primary (Dark Mode)
-val Blue600 = Color(0xFF2563EB)  // Primary (Light Mode)
-val Blue900 = Color(0xFF1E3A8A)  // OnAccentBlueContainer
+val EmeraldAccent = Color(0xFF10B981)
+val EmeraldLight = Color(0xFF34D399)
 
-// Brand: Slate (Grays)
-val Slate50 = Color(0xFFF8FAFC)  // Background (Light)
-val Slate100 = Color(0xFFF1F5F9) // SurfaceVariant (Light)
-val Slate200 = Color(0xFFE2E8F0) // Outline (Light)
-val Slate500 = Color(0xFF64748B) // TextMuted
-val Slate700 = Color(0xFF334155) // SurfaceVariant (Dark)
-val Slate800 = Color(0xFF1E293B) // Surface (Dark)
-val Slate900 = Color(0xFF0F172A) // Background (Dark) / TextDark (Light)
+val SkyAzure = Color(0xFF0284C7)
+val SkyLight = Color(0xFF38BDF8)
 
-// Semantic: Error
-val Red100 = Color(0xFFFEE2E2)
-val Red600 = Color(0xFFDC2626)
-val Red800 = Color(0xFF991B1B)
-val Red300 = Color(0xFFFCA5A5) // Error (Dark Mode)
+val Slate900 = Color(0xFF0F172A)
+val Slate800 = Color(0xFF1E293B)
+val Slate700 = Color(0xFF334155)
+val Slate500 = Color(0xFF64748B)
+val Slate400 = Color(0xFF94A3B8)
+val Slate100 = Color(0xFFF1F5F9)
 
-// Semantic: Success & Warning (For custom extensions)
-val Emerald100 = Color(0xFFD1FAE5)
-val Emerald600 = Color(0xFF059669)
-val Emerald300 = Color(0xFF6EE7B7) // Success (Dark Mode)
-
-val Amber100 = Color(0xFFFEF3C7)
-val Amber600 = Color(0xFFD97706)
-val Amber300 = Color(0xFFFCD34D) // Warning (Dark Mode)
-package com.example.ui.theme
-
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-
-object SemanticColors {
-    val success: Color
-        @Composable get() = if (isSystemInDarkTheme()) Emerald300 else Emerald600
-        
-    val successContainer: Color
-        @Composable get() = if (isSystemInDarkTheme()) Emerald600.copy(alpha = 0.2f) else Emerald100
-
-    val warning: Color
-        @Composable get() = if (isSystemInDarkTheme()) Amber300 else Amber600
-        
-    val warningContainer: Color
-        @Composable get() = if (isSystemInDarkTheme()) Amber600.copy(alpha = 0.2f) else Amber100
-}
-
+val White = Color(0xFFFFFFFF)
+val RedDanger = Color(0xFFEF4444)

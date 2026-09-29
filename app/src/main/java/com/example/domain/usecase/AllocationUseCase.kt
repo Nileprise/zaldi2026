@@ -4,151 +4,167 @@ import com.example.domain.model.AllocationRequest
 import com.example.domain.model.AllocationResult
 import com.example.domain.model.DriverAllocationSnapshot
 import com.example.domain.model.DriverAvailabilityState
-import kotlin.math.acos
+import com.example.domain.model.GeoCoordinate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
+import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.sin
+import kotlin.math.sqrt
+import kotlin.time.Duration.Companion.minutes
 
-class AllocationUseCase {
-    
-    fun findBestDriverMatch(request: AllocationRequest): AllocationResult? {
-        // Step 1: Get nearby drivers using geohashing
-        val nearbyDrivers = getNearbyDrivers(
-            lat = request.pickupLat,
-            lng = request.pickupLng,
+/**
+ * Interface to be implemented by the Data layer (e.g., LogisticsRepository).
+ * This keeps the Domain layer 100% independent of databases or network calls.
+ */
+interface DriverRepository {
+    suspend fun getNearbyDrivers(
+        location: GeoCoordinate,
+        radiusKm: Double,
+        vehicleId: String
+    ): List<DriverAllocationSnapshot>
+}
+
+/**
+ * Modernized Use Case for Driver Allocation.
+ */
+class AllocationUseCase @Inject constructor(
+    private val driverRepository: DriverRepository
+) {
+    /**
+     * Finds the best driver match for a given order request.
+     * Uses Dispatchers.Default because sorting and Haversine math are CPU-intensive.
+     */
+    suspend fun findBestDriverMatch(request: AllocationRequest): AllocationResult = withContext(Dispatchers.Default) {
+        
+        // Step 1: Fetch candidates via Repository (I/O bound behind the interface)
+        val nearbyDrivers = driverRepository.getNearbyDrivers(
+            location = request.pickupLocation,
             radiusKm = request.maxAllocationRadiusKm,
             vehicleId = request.requiredVehicleId
         )
-        
+
         if (nearbyDrivers.isEmpty()) {
-            return null // No drivers available
-        }
-        
-        // Step 2: Filter by availability state
-        val availableDrivers = nearbyDrivers.filter {
-            it.availabilityState == DriverAvailabilityState.ONLINE
-        }
-        
-        if (availableDrivers.isEmpty()) {
-            return null
-        }
-        
-        // Step 3: Score each driver
-        val scoredDrivers = availableDrivers.map { driver ->
-            Pair(
-                driver,
-                calculateAllocationScore(
-                    driver = driver,
-                    pickupLat = request.pickupLat,
-                    pickupLng = request.pickupLng,
-                    minRating = request.minDriverRating
-                )
+            return@withContext AllocationResult.NoDriversAvailable(
+                orderId = request.orderId,
+                reason = "No drivers found within ${request.maxAllocationRadiusKm}km."
             )
-        }.filter { (_, score) -> score > 0f } // Filter out ineligible drivers
-        
-        if (scoredDrivers.isEmpty()) {
-            return null
         }
+
+        // Step 2: Filter eligible candidates
+        val eligibleDrivers = nearbyDrivers.filter { driver ->
+            driver.availabilityState == DriverAvailabilityState.ONLINE &&
+            driver.rating >= request.minDriverRating &&
+            // Future-proofing: Don't assign if phone battery is critically low (< 10%)
+            (driver.batteryLevelPercentage == null || driver.batteryLevelPercentage > 10)
+        }
+
+        if (eligibleDrivers.isEmpty()) {
+            return@withContext AllocationResult.NoDriversAvailable(
+                orderId = request.orderId,
+                reason = "Drivers found, but none are currently online or meet minimum criteria."
+            )
+        }
+
+        // Step 3: Score each driver
+        val scoredDrivers = eligibleDrivers.mapNotNull { driver ->
+            val score = calculateAllocationScore(driver, request.pickupLocation)
+            if (score > 0f) Pair(driver, score) else null
+        }
+
+        if (scoredDrivers.isEmpty()) {
+            return@withContext AllocationResult.NoDriversAvailable(
+                orderId = request.orderId,
+                reason = "No eligible drivers passed the scoring threshold."
+            )
+        }
+
+        // Step 4: Sort by score descending
+        val sortedCandidates = scoredDrivers.sortedByDescending { it.second }
         
-        // Step 4: Sort by score and pick best
-        val sorted = scoredDrivers.sortByDescending { it.second }
-        val bestDriver = sorted[0].first
-        val bestScore = sorted[0].second
+        val bestMatch = sortedCandidates.first()
+        val bestDriver = bestMatch.first
+        val bestScore = bestMatch.second
+
+        // Step 5: Calculate precise ETA
+        val distanceKm = haversineDistanceKm(bestDriver.location, request.pickupLocation)
         
-        // Step 5: Calculate arrival time
-        val distanceKm = haversineDistance(
-            request.pickupLat, request.pickupLng,
-            bestDriver.currentLocation.latitude, bestDriver.currentLocation.longitude
-        )
-        val arrivalMinutes = (distanceKm * 4).toInt() // Rough estimate: 4 min per km
-        
-        return AllocationResult(
+        // Assuming ~15 km/h urban speed = ~4 mins per km
+        val estimatedMinutes = (distanceKm * 4.0).toInt().coerceAtLeast(1)
+        val arrivalDuration = estimatedMinutes.minutes
+
+        // Step 6: Return fully mapped Success State
+        AllocationResult.Success(
             orderId = request.orderId,
             allocatedDriverId = bestDriver.driverId,
             driverSnapshot = bestDriver.copy(
                 distanceFromPickupKm = distanceKm,
-                estimatedArrivalMinutes = arrivalMinutes
+                estimatedArrival = arrivalDuration
             ),
             allocationScore = bestScore,
-            estimatedArrivalSeconds = arrivalMinutes * 60,
-            fallbackOptions = sorted.drop(1).map { it.first }.take(3)
+            estimatedArrival = arrivalDuration,
+            fallbackOptions = sortedCandidates.drop(1).take(3).map { it.first }
         )
     }
-    
-    private fun getNearbyDrivers(
-        lat: Double,
-        lng: Double,
-        radiusKm: Double,
-        vehicleId: String
-    ): List<DriverAllocationSnapshot> {
-        // In production, this would:
-        // 1. Query Redis geospatial index with geohash
-        // 2. Filter by vehicle type
-        // 3. Return with location data
-        
-        // Mock implementation
-        return listOf(
-            DriverAllocationSnapshot(
-                driverId = "DRV-101",
-                name = "Ravi Kumar",
-                phone = "+91 98452 11094",
-                currentLocation = com.google.android.gms.maps.model.LatLng(lat + 0.01, lng + 0.01),
-                availabilityState = DriverAvailabilityState.ONLINE,
-                rating = 4.88,
-                totalCompletedTrips = 2340,
-                vehicleId = vehicleId,
-                vehicleNumber = "KA 05 MX 2190",
-                lastLocationUpdateTime = System.currentTimeMillis()
-            ),
-            DriverAllocationSnapshot(
-                driverId = "DRV-102",
-                name = "Amit Singh",
-                phone = "+91 99876 54321",
-                currentLocation = com.google.android.gms.maps.model.LatLng(lat - 0.015, lng + 0.02),
-                availabilityState = DriverAvailabilityState.ONLINE,
-                rating = 4.65,
-                totalCompletedTrips = 1890,
-                vehicleId = vehicleId,
-                vehicleNumber = "KA 05 MX 2191",
-                lastLocationUpdateTime = System.currentTimeMillis()
-            )
-        )
-    }
-    
+
+    /**
+     * Calculates a matching score (0 to 100) for a driver.
+     */
     private fun calculateAllocationScore(
         driver: DriverAllocationSnapshot,
-        pickupLat: Double,
-        pickupLng: Double,
-        minRating: Double
+        pickupLocation: GeoCoordinate
     ): Float {
-        if (driver.rating < minRating) return 0f
+        // Base weights: Proximity(40), Rating(25), Acceptance(20), Freshness(10), Battery(5)
         
-        // Score factors (out of 100):
-        // - Proximity: 40 points
-        // - Rating: 30 points
-        // - Completion rate: 20 points
-        // - Location freshness: 10 points
+        val distance = haversineDistanceKm(driver.location, pickupLocation)
         
-        val distance = haversineDistance(
-            driver.currentLocation.latitude, driver.currentLocation.longitude,
-            pickupLat, pickupLng
-        )
+        // 1. Proximity Score (Max 40)
+        val proximityScore = if (distance <= 1.0) 40f else (40f / distance.toFloat()).coerceAtMost(40f)
         
-        val proximityScore = if (distance <= 1.0) 40f else (40f * (1.0 / distance)).coerceAtMost(40f)
-        val ratingScore = (driver.rating / 5.0 * 30).toFloat()
-        val completionScore = (driver.acceptanceRate * 20).toFloat()
-        val freshnessScore = if (System.currentTimeMillis() - driver.lastLocationUpdateTime < 60000) 10f else 5f
+        // 2. Rating Score (Max 25)
+        val ratingScore = (driver.rating / 5.0 * 25).toFloat()
         
-        return (proximityScore + ratingScore + completionScore + freshnessScore).coerceIn(0f, 100f)
+        // 3. Completion/Acceptance Score (Max 20)
+        val completionScore = (driver.acceptanceRate * 20)
+        
+        // 4. Location Freshness Score (Max 10)
+        val millisSinceUpdate = System.currentTimeMillis() - driver.lastLocationUpdateTime
+        val freshnessScore = when {
+            millisSinceUpdate < 30_000 -> 10f // Under 30 secs
+            millisSinceUpdate < 60_000 -> 7f  // Under 1 min
+            millisSinceUpdate < 120_000 -> 3f // Under 2 mins
+            else -> 0f                        // Stale location
+        }
+        
+        // 5. Hardware/Battery Score (Max 5)
+        val batteryScore = when (driver.batteryLevelPercentage) {
+            null -> 5f // Assume okay if not reported
+            in 50..100 -> 5f
+            in 20..49 -> 3f
+            else -> 0f
+        }
+
+        return (proximityScore + ratingScore + completionScore + freshnessScore + batteryScore)
+            .coerceIn(0f, 100f)
     }
-    
-    private fun haversineDistance(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
-        val R = 6371 // Earth radius in km
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLng = Math.toRadians(lng2 - lng1)
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLng / 2) * sin(dLng / 2)
-        val c = 2 * acos(kotlin.math.sqrt(a))
-        return R * c
+
+    /**
+     * Industry-standard Haversine formula using atan2 for numerical stability.
+     */
+    private fun haversineDistanceKm(coord1: GeoCoordinate, coord2: GeoCoordinate): Double {
+        val earthRadiusKm = 6371.0
+        
+        val dLat = Math.toRadians(coord2.lat - coord1.lat)
+        val dLng = Math.toRadians(coord2.lng - coord1.lng)
+        
+        val lat1 = Math.toRadians(coord1.lat)
+        val lat2 = Math.toRadians(coord2.lat)
+
+        val a = sin(dLat / 2).pow(2) + sin(dLng / 2).pow(2) * cos(lat1) * cos(lat2)
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        
+        return earthRadiusKm * c
     }
 }

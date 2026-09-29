@@ -3,1051 +3,510 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Akhil Logistics | Intra-City Freight & Delivery Platform</title>
-  <!-- Google Fonts & Leaflet CSS for Map -->
+  <title>Akhil Logistics | Real-Time Freight Platform</title>
+  
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Leaflet Map & Routing Machine CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+
+  <!-- Leaflet & Routing JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
 
   <style>
     :root {
       --primary: #F59E0B;
       --primary-dark: #D97706;
-      --primary-light: #FEF3C7;
-      --primary-glow: rgba(245, 158, 11, 0.25);
-      --bg: #0F172A;
-      --card-bg: #1E293B;
-      --card-border: #334155;
-      --surface-light: #F8FAFC;
-      --text-main: #0F172A;
-      --text-dark: #F8FAFC;
+      --primary-glow: rgba(245, 158, 11, 0.3);
+      --bg: #0B0F19;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --text-main: #F8FAFC;
       --text-muted: #94A3B8;
       --success: #10B981;
-      --success-bg: rgba(16, 185, 129, 0.15);
-      --info: #3B82F6;
       --danger: #EF4444;
-      --font: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font: 'Plus Jakarta Sans', system-ui, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: var(--font);
-      background: #0B0F19;
-      color: #E2E8F0;
+      background: var(--bg);
+      color: var(--text-main);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      line-height: 1.5;
+      background-image: 
+        radial-gradient(circle at 15% 50%, rgba(245, 158, 11, 0.05), transparent 25%),
+        radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.05), transparent 25%);
     }
 
-    /* Top Navigation Bar */
+    /* Header & Navigation */
     header {
-      background: rgba(15, 23, 42, 0.9);
-      backdrop-filter: blur(12px);
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--card-border);
       position: sticky;
       top: 0;
       z-index: 1000;
-      padding: 0.75rem 1.5rem;
+      padding: 1rem 1.5rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
 
-    .brand-group {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
+    .brand { display: flex; align-items: center; gap: 0.75rem; }
     .brand-icon {
-      width: 42px;
-      height: 42px;
+      width: 40px; height: 40px;
       background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      font-weight: 800;
-      font-size: 1.25rem;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 1.2rem;
       box-shadow: 0 4px 12px var(--primary-glow);
     }
+    .brand h1 { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.02em; }
+    .brand p { font-size: 0.75rem; color: var(--text-muted); }
 
-    .brand-text h1 {
-      font-size: 1.15rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .brand-text p {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      color: var(--success);
-      padding: 0.25rem 0.65rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-
-    .status-pulse {
-      width: 8px;
-      height: 8px;
-      background: var(--success);
-      border-radius: 50%;
-      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
-      animation: pulse 1.8s infinite;
-    }
-
-    @keyframes pulse {
-      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-    }
-
-    /* Role Navigation Tabs */
     .role-nav {
-      display: flex;
-      background: #111827;
-      padding: 0.35rem;
-      border-radius: 12px;
-      border: 1px solid var(--card-border);
-      gap: 0.25rem;
+      display: flex; background: rgba(0,0,0,0.4);
+      padding: 0.35rem; border-radius: 12px; border: 1px solid var(--card-border);
     }
-
     .role-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      padding: 0.45rem 1rem;
-      border-radius: 8px;
-      font-family: var(--font);
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
+      background: transparent; border: none; color: var(--text-muted);
+      padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600;
+      cursor: pointer; transition: 0.2s; font-family: var(--font); font-size: 0.85rem;
     }
-
-    .role-btn:hover {
-      color: #fff;
-      background: rgba(255, 255, 255, 0.05);
-    }
-
+    .role-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
     .role-btn.active {
-      background: var(--primary);
-      color: #0F172A;
-      font-weight: 700;
+      background: var(--primary); color: #000; font-weight: 700;
       box-shadow: 0 2px 8px var(--primary-glow);
     }
 
-    /* Main Container */
-    main {
-      flex: 1;
-      padding: 1.5rem;
-      max-width: 1400px;
-      margin: 0 auto;
-      width: 100%;
-    }
+    /* Layout */
+    main { flex: 1; padding: 1.5rem; max-width: 1400px; margin: 0 auto; width: 100%; }
+    .grid-layout { display: grid; grid-template-columns: 450px 1fr; gap: 1.5rem; align-items: start; }
+    @media (max-width: 968px) { .grid-layout { grid-template-columns: 1fr; } }
 
-    .grid-layout {
-      display: grid;
-      grid-template-columns: 420px 1fr;
-      gap: 1.5rem;
-      align-items: start;
-    }
-
-    @media (max-width: 1024px) {
-      .grid-layout {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    /* Cards */
     .panel-card {
       background: var(--card-bg);
+      backdrop-filter: blur(12px);
       border: 1px solid var(--card-border);
-      border-radius: 18px;
-      padding: 1.25rem;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      border-radius: 16px; padding: 1.5rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
     }
 
-    .panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1.25rem;
-      padding-bottom: 0.75rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    }
-
-    .panel-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    /* Form Inputs */
-    .input-group {
-      margin-bottom: 1rem;
-    }
-
-    .input-label {
-      display: block;
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-      margin-bottom: 0.4rem;
-    }
-
+    /* Form Elements */
+    .input-group { margin-bottom: 1.2rem; position: relative; }
+    .input-label { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .input-wrapper { display: flex; gap: 0.5rem; }
     .input-control {
-      width: 100%;
-      background: #0F172A;
-      border: 1px solid var(--card-border);
-      border-radius: 10px;
-      padding: 0.7rem 0.9rem;
-      color: #F8FAFC;
-      font-family: var(--font);
-      font-size: 0.9rem;
-      outline: none;
-      transition: border-color 0.2s;
+      flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--card-border);
+      border-radius: 10px; padding: 0.8rem 1rem; color: #fff; font-family: var(--font);
+      outline: none; transition: 0.2s; width: 100%;
     }
-
-    .input-control:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 2px var(--primary-glow);
+    .input-control:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-glow); }
+    .btn-icon {
+      background: rgba(255,255,255,0.05); border: 1px solid var(--card-border);
+      border-radius: 10px; padding: 0 1rem; color: var(--primary); cursor: pointer; transition: 0.2s;
     }
+    .btn-icon:hover { background: rgba(245, 158, 11, 0.1); border-color: var(--primary); }
 
-    /* Vehicle Selector Grid */
-    .vehicle-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 0.6rem;
-      margin-bottom: 1rem;
-    }
-
+    /* Vehicle Grid */
+    .vehicle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
     .vehicle-card {
-      background: #0F172A;
-      border: 1.5px solid var(--card-border);
-      border-radius: 12px;
-      padding: 0.75rem 0.5rem;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
+      background: rgba(0,0,0,0.3); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1rem 0.5rem; text-align: center; cursor: pointer; transition: 0.2s;
     }
-
-    .vehicle-card:hover {
-      border-color: #64748B;
-      transform: translateY(-2px);
-    }
-
     .vehicle-card.selected {
-      border-color: var(--primary);
-      background: rgba(245, 158, 11, 0.08);
+      border-color: var(--primary); background: rgba(245, 158, 11, 0.1);
       box-shadow: 0 4px 12px var(--primary-glow);
     }
+    .v-icon { font-size: 1.8rem; margin-bottom: 0.4rem; }
+    .v-name { font-size: 0.8rem; font-weight: 700; }
+    .v-fare { font-size: 0.9rem; font-weight: 800; color: var(--primary); margin-top: 0.3rem; font-family: var(--font-mono); }
 
-    .vehicle-emoji {
-      font-size: 1.75rem;
-      margin-bottom: 0.25rem;
-    }
-
-    .vehicle-name {
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: #fff;
-    }
-
-    .vehicle-capacity {
-      font-size: 0.65rem;
-      color: var(--text-muted);
-    }
-
-    .vehicle-fare {
-      font-size: 0.8rem;
-      font-weight: 800;
-      color: var(--primary);
-      margin-top: 0.25rem;
-      font-family: var(--font-mono);
-    }
-
-    /* Fare Estimate Summary Box */
-    .estimate-box {
-      background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.05));
-      border: 1px solid rgba(245, 158, 11, 0.25);
-      border-radius: 14px;
-      padding: 1rem;
-      margin: 1.25rem 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .estimate-title {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-    }
-
-    .estimate-details {
-      font-size: 0.75rem;
-      color: #CBD5E1;
-      margin-top: 0.2rem;
-    }
-
-    .estimate-price {
-      font-size: 1.75rem;
-      font-weight: 800;
-      color: var(--primary);
-      font-family: var(--font-mono);
-    }
-
-    /* Primary Action Buttons */
+    /* Buttons & Utils */
     .btn-cta {
-      width: 100%;
-      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-      border: none;
-      color: #0F172A;
-      font-family: var(--font);
-      font-size: 1rem;
-      font-weight: 700;
-      padding: 0.85rem;
-      border-radius: 12px;
-      cursor: pointer;
-      box-shadow: 0 4px 15px var(--primary-glow);
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
+      width: 100%; background: var(--primary); color: #000; border: none;
+      padding: 1rem; border-radius: 12px; font-weight: 800; font-size: 1rem;
+      cursor: pointer; transition: 0.2s; font-family: var(--font);
+      display: flex; justify-content: center; align-items: center; gap: 0.5rem;
     }
+    .btn-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px var(--primary-glow); }
+    .btn-cta:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
-    .btn-cta:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
-    }
+    .tab-content { display: none; animation: fadeIn 0.3s ease; }
+    .tab-content.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* Live Tracking Map Card */
-    .map-container {
-      height: 540px;
-      width: 100%;
-      border-radius: 14px;
-      overflow: hidden;
-      border: 1px solid var(--card-border);
-      position: relative;
+    /* Map */
+    .map-wrapper { position: relative; height: 600px; border-radius: 16px; overflow: hidden; border: 1px solid var(--card-border); }
+    #map { height: 100%; width: 100%; background: #0B0F19; }
+    
+    /* Telemetry HUD */
+    .hud {
+      position: absolute; top: 1rem; left: 1rem; right: 1rem;
+      background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(8px);
+      border: 1px solid var(--card-border); border-radius: 12px;
+      padding: 1rem; display: flex; justify-content: space-between; z-index: 1000;
     }
+    .hud-stat { display: flex; flex-direction: column; }
+    .hud-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.2rem; }
+    .hud-val { font-size: 1rem; font-weight: 800; font-family: var(--font-mono); }
 
-    #live-map {
-      height: 100%;
-      width: 100%;
-      background: #111827;
-    }
-
-    /* Map Floating Overlay Bar */
-    .map-telemetry {
-      position: absolute;
-      top: 14px;
-      left: 14px;
-      right: 14px;
-      background: rgba(15, 23, 42, 0.92);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 0.75rem 1rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      z-index: 500;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-    }
-
-    .telemetry-item {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .telemetry-label {
-      font-size: 0.65rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      font-weight: 600;
-    }
-
-    .telemetry-val {
-      font-size: 0.9rem;
-      font-weight: 700;
-      color: #fff;
-      font-family: var(--font-mono);
-    }
-
-    /* Driver Live Card */
-    .driver-pill {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      background: #0F172A;
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 0.75rem;
-      margin-top: 1rem;
-    }
-
-    .driver-avatar {
-      width: 44px;
-      height: 44px;
-      border-radius: 10px;
-      background: #334155;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      color: var(--primary);
-    }
-
-    .driver-info h4 {
-      font-size: 0.85rem;
-      color: #fff;
-    }
-
-    .driver-info p {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-
-    .driver-badge {
-      margin-left: auto;
-      font-size: 0.75rem;
-      background: rgba(245, 158, 11, 0.15);
-      color: var(--primary);
-      padding: 0.2rem 0.5rem;
-      border-radius: 6px;
-      font-weight: 700;
-    }
-
-    /* Admin Table */
-    .fleet-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 1rem;
-      font-size: 0.85rem;
-    }
-
-    .fleet-table th {
-      text-align: left;
-      padding: 0.65rem 0.75rem;
-      color: var(--text-muted);
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      border-bottom: 1px solid var(--card-border);
-    }
-
-    .fleet-table td {
-      padding: 0.75rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      color: #E2E8F0;
-    }
-
-    .badge-approved {
-      background: rgba(16, 185, 129, 0.2);
-      color: var(--success);
-      padding: 0.2rem 0.5rem;
-      border-radius: 6px;
-      font-weight: 700;
-      font-size: 0.7rem;
-    }
-
-    .badge-busy {
-      background: rgba(245, 158, 11, 0.2);
-      color: var(--primary);
-      padding: 0.2rem 0.5rem;
-      border-radius: 6px;
-      font-weight: 700;
-      font-size: 0.7rem;
-    }
-
-    .badge-pending {
-      background: rgba(59, 130, 246, 0.2);
-      color: var(--info);
-      padding: 0.2rem 0.5rem;
-      border-radius: 6px;
-      font-weight: 700;
-      font-size: 0.7rem;
-    }
-
-    .btn-sm {
-      padding: 0.3rem 0.6rem;
-      font-size: 0.75rem;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.2s;
-    }
-
-    .btn-approve {
-      background: var(--success);
-      color: #0F172A;
-    }
-
-    .btn-reject {
-      background: #334155;
-      color: #CBD5E1;
-    }
-
-    /* Tabs switching */
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    /* Bottom Status Footer */
-    footer {
-      border-top: 1px solid var(--card-border);
-      padding: 1rem 1.5rem;
-      text-align: center;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      background: rgba(15, 23, 42, 0.7);
-    }
+    /* Loader */
+    .loader { display: none; width: 16px; height: 16px; border: 2px solid #fff; border-bottom-color: transparent; border-radius: 50%; animation: rotation 1s linear infinite; }
+    @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 
-  <!-- Top Bar -->
   <header>
-    <div class="brand-group">
+    <div class="brand">
       <div class="brand-icon">⚡</div>
-      <div class="brand-text">
-        <h1>Akhil Logistics <span class="status-badge"><span class="status-pulse"></span> Live Fleet</span></h1>
-        <p>Intra-City Freight, 2-Wheelers, Autos & Heavy Trucks</p>
+      <div>
+        <h1>Akhil Logistics</h1>
+        <p>Real-Time Freight & Fleet Tracking</p>
       </div>
     </div>
-
-    <!-- Role Switcher -->
     <nav class="role-nav">
-      <button class="role-btn active" onclick="switchRole('customer')">
-        📦 Customer Booking
-      </button>
-      <button class="role-btn" onclick="switchRole('driver')">
-        🚚 Driver Console
-      </button>
-      <button class="role-btn" onclick="switchRole('admin')">
-        📊 Admin Fleet
-      </button>
+      <button class="role-btn active" onclick="switchRole('customer')">📦 Customer</button>
+      <button class="role-btn" onclick="switchRole('driver')">🚚 Driver</button>
+      <button class="role-btn" onclick="switchRole('admin')">📊 Admin</button>
     </nav>
   </header>
 
-  <!-- Main Content -->
   <main>
-    <!-- TAB 1: CUSTOMER VIEW -->
+    <!-- CUSTOMER TAB -->
     <div id="tab-customer" class="tab-content active">
       <div class="grid-layout">
         
-        <!-- Left: Booking Controls -->
         <div class="panel-card">
-          <div class="panel-header">
-            <span class="panel-title">📍 Dispatch New Goods</span>
-            <span style="font-size: 0.75rem; color: var(--primary); font-weight: 700;">Instant Fare</span>
-          </div>
+          <h2 style="font-size: 1.2rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between;">
+            Book Freight <span id="calc-status" style="font-size: 0.8rem; color: var(--primary);">Waiting for input...</span>
+          </h2>
 
-          <!-- Pickup Address -->
           <div class="input-group">
             <label class="input-label">Pickup Location</label>
-            <input type="text" id="pickup-input" class="input-control" value="Indiranagar 100ft Rd, Bengaluru" oninput="recalcDistance()" />
+            <div class="input-wrapper">
+              <input type="text" id="pickup-input" class="input-control" placeholder="Enter pickup address" onchange="geocodeAddress('pickup')" />
+              <button class="btn-icon" onclick="useDeviceLocation('pickup')" title="Use Current GPS">🎯</button>
+            </div>
           </div>
 
-          <!-- Dropoff Address -->
           <div class="input-group">
             <label class="input-label">Drop-off Destination</label>
-            <input type="text" id="dropoff-input" class="input-control" value="Koramangala 4th Block, Bengaluru" oninput="recalcDistance()" />
+            <div class="input-wrapper">
+              <input type="text" id="dropoff-input" class="input-control" placeholder="Enter drop-off address" onchange="geocodeAddress('dropoff')" />
+              <button class="btn-icon" onclick="useDeviceLocation('dropoff')" title="Use Current GPS">🎯</button>
+            </div>
           </div>
 
-          <!-- Goods Type -->
           <div class="input-group">
-            <label class="input-label">Category of Cargo</label>
-            <select id="goods-type" class="input-control">
-              <option>Electronics & Hardware Appliances</option>
-              <option>Furniture & Office Supplies</option>
-              <option>Groceries, FMCG & Perishables</option>
-              <option>Documents, Parcels & Cartons</option>
-              <option>Industrial Equipment & Spare Parts</option>
-            </select>
-          </div>
-
-          <!-- Vehicle Tiers -->
-          <div class="input-group">
-            <label class="input-label">Select Commercial Vehicle</label>
+            <label class="input-label">Select Vehicle</label>
             <div class="vehicle-grid">
-              
-              <div class="vehicle-card" onclick="selectVehicle('bike', 15, 7.5, '20 kg', '2-Wheeler')">
-                <div class="vehicle-emoji">🛵</div>
-                <div class="vehicle-name">2-Wheeler</div>
-                <div class="vehicle-capacity">Up to 20kg</div>
-                <div class="vehicle-fare" id="fare-bike">₹65</div>
+              <div class="vehicle-card selected" onclick="selectVehicle('bike', 50, 8)" id="v-bike">
+                <div class="v-icon">🛵</div><div class="v-name">2-Wheeler</div><div class="v-fare" id="fare-bike">₹--</div>
               </div>
-
-              <div class="vehicle-card" onclick="selectVehicle('auto', 40, 14, '500 kg', 'Cargo 3W')">
-                <div class="vehicle-emoji">🛺</div>
-                <div class="vehicle-name">Cargo 3W</div>
-                <div class="vehicle-capacity">Up to 500kg</div>
-                <div class="vehicle-fare" id="fare-auto">₹195</div>
+              <div class="vehicle-card" onclick="selectVehicle('auto', 100, 15)" id="v-auto">
+                <div class="v-icon">🛺</div><div class="v-name">Cargo 3W</div><div class="v-fare" id="fare-auto">₹--</div>
               </div>
-
-              <div class="vehicle-card selected" onclick="selectVehicle('tata', 80, 22, '1000 kg', 'Tata Ace')">
-                <div class="vehicle-emoji">🚚</div>
-                <div class="vehicle-name">Tata Ace</div>
-                <div class="vehicle-capacity">Up to 1.0 Ton</div>
-                <div class="vehicle-fare" id="fare-tata">₹320</div>
+              <div class="vehicle-card" onclick="selectVehicle('tata', 250, 25)" id="v-tata">
+                <div class="v-icon">🚚</div><div class="v-name">Tata Ace</div><div class="v-fare" id="fare-tata">₹--</div>
               </div>
-
-              <div class="vehicle-card" onclick="selectVehicle('pickup', 140, 28, '1.5 Ton', 'Pickup 8ft')">
-                <div class="vehicle-emoji">🚛</div>
-                <div class="vehicle-name">Pickup 8ft</div>
-                <div class="vehicle-capacity">Up to 1.5 Ton</div>
-                <div class="vehicle-fare" id="fare-pickup">₹480</div>
-              </div>
-
-              <div class="vehicle-card" onclick="selectVehicle('truck', 220, 36, '2.5 Ton', '14ft Truck')">
-                <div class="vehicle-emoji">📦</div>
-                <div class="vehicle-name">14ft Truck</div>
-                <div class="vehicle-capacity">Up to 2.5 Ton</div>
-                <div class="vehicle-fare" id="fare-truck">₹720</div>
-              </div>
-
-              <div class="vehicle-card" onclick="selectVehicle('heavy', 350, 48, '4.0 Ton', 'Heavy Hauler')">
-                <div class="vehicle-emoji">🏗️</div>
-                <div class="vehicle-name">4 Ton Hauler</div>
-                <div class="vehicle-capacity">Heavy Duty</div>
-                <div class="vehicle-fare" id="fare-heavy">₹990</div>
-              </div>
-
             </div>
           </div>
 
-          <!-- Price Card -->
-          <div class="estimate-box">
+          <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div class="estimate-title">Calculated Estimate</div>
-              <div class="estimate-details" id="route-summary">7.4 km • ~24 mins via Inner Ring Rd</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Real-Time Estimate</div>
+              <div id="route-summary" style="font-size: 0.85rem; margin-top: 0.2rem;">0 km • 0 mins</div>
             </div>
-            <div class="estimate-price" id="total-fare-display">₹320</div>
+            <div id="total-fare" style="font-size: 2rem; font-weight: 800; color: var(--primary); font-family: var(--font-mono);">₹0</div>
           </div>
 
-          <button class="btn-cta" onclick="startSimulatedBooking()">
-            <span>⚡</span> Confirm & Dispatch Driver
+          <button id="book-btn" class="btn-cta" onclick="confirmBooking()" disabled>
+            <span class="loader" id="btn-loader"></span>
+            <span id="btn-text">Calculate Route to Book</span>
           </button>
-
-          <!-- Assigned Driver Info -->
-          <div class="driver-pill" id="assigned-driver-card">
-            <div class="driver-avatar">RK</div>
-            <div class="driver-info">
-              <h4>Ramesh Kumar (4.9 ★)</h4>
-              <p>Tata Ace • KA-01-EA-4421</p>
-            </div>
-            <div class="driver-badge">ASSIGNED</div>
-          </div>
-
         </div>
 
-        <!-- Right: Real-time Map Canvas -->
-        <div class="panel-card" style="padding: 0.75rem;">
-          <div class="map-container">
-            <!-- Overlay telemetry -->
-            <div class="map-telemetry">
-              <div class="telemetry-item">
-                <span class="telemetry-label">Trip Status</span>
-                <span class="telemetry-val" id="telemetry-status" style="color: var(--primary);">Driver En Route</span>
-              </div>
-              <div class="telemetry-item">
-                <span class="telemetry-label">Live Distance</span>
-                <span class="telemetry-val" id="telemetry-dist">7.4 km</span>
-              </div>
-              <div class="telemetry-item">
-                <span class="telemetry-label">ETA</span>
-                <span class="telemetry-val" id="telemetry-eta" style="color: var(--success);">18 mins</span>
-              </div>
-              <div class="telemetry-item">
-                <span class="telemetry-label">Security OTP</span>
-                <span class="telemetry-val" style="color: #60A5FA;">5492</span>
-              </div>
+        <div class="panel-card" style="padding: 0;">
+          <div class="map-wrapper">
+            <div class="hud">
+              <div class="hud-stat"><span class="hud-label">Trip Status</span><span class="hud-val" id="hud-status" style="color: var(--primary);">Awaiting Route</span></div>
+              <div class="hud-stat"><span class="hud-label">Distance</span><span class="hud-val" id="hud-dist">0.0 km</span></div>
+              <div class="hud-stat"><span class="hud-label">ETA</span><span class="hud-val" id="hud-eta" style="color: var(--success);">0 min</span></div>
             </div>
-
-            <!-- Leaflet Interactive Map -->
-            <div id="live-map"></div>
+            <div id="map"></div>
           </div>
         </div>
 
       </div>
     </div>
 
-    <!-- TAB 2: DRIVER PARTNER VIEW -->
+    <!-- DRIVER TAB -->
     <div id="tab-driver" class="tab-content">
-      <div class="grid-layout">
+      <div class="panel-card" style="max-width: 600px; margin: 0 auto; text-align: center;">
+        <h2 style="margin-bottom: 1rem;">Driver Telemetry Console</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem;">
+          Broadcast your real-time HTML5 GPS coordinates to the network.
+        </p>
         
-        <!-- Driver Duty Dashboard -->
-        <div class="panel-card">
-          <div class="panel-header">
-            <span class="panel-title">👨‍✈️ Driver Partner Console</span>
-            <span class="status-badge" id="driver-duty-badge"><span class="status-pulse"></span> ONLINE</span>
+        <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+          <div style="font-family: var(--font-mono); font-size: 1.2rem; color: var(--primary);" id="driver-coords">
+            Lat: --.----, Lng: --.----
           </div>
-
-          <div style="background: #0F172A; border-radius: 12px; padding: 1rem; margin-bottom: 1.25rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <h3 style="color: #fff; font-size: 1rem;">Ramesh Kumar</h3>
-                <p style="color: var(--text-muted); font-size: 0.8rem;">Vehicle: KA-01-EA-4421 (Tata Ace)</p>
-              </div>
-              <button class="btn-sm btn-approve" id="toggle-duty-btn" onclick="toggleDriverDuty()">Go Offline</button>
-            </div>
-          </div>
-
-          <!-- Driver Trip Actions -->
-          <div style="border: 1px solid var(--card-border); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-            <div style="font-size: 0.75rem; color: var(--primary); font-weight: 700; text-transform: uppercase;">Active Assigned Assignment</div>
-            <h4 style="font-size: 0.95rem; margin: 0.3rem 0; color: #fff;">Order #ORD-78219 (Electronics Goods)</h4>
-            <p style="font-size: 0.8rem; color: #94A3B8;">Pickup: Indiranagar 100ft Rd</p>
-            <p style="font-size: 0.8rem; color: #94A3B8;">Drop: Koramangala 4th Block</p>
-            <p style="font-size: 0.85rem; color: var(--success); font-weight: 700; margin-top: 0.4rem;">Payout: ₹280.00</p>
-            
-            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-              <button class="btn-cta" style="flex: 1; padding: 0.6rem; font-size: 0.85rem;" onclick="updateDriverStage('Goods Loaded')">📦 Mark Loaded</button>
-              <button class="btn-cta" style="flex: 1; padding: 0.6rem; font-size: 0.85rem; background: var(--success);" onclick="updateDriverStage('Delivered')">✅ Mark Delivered</button>
-            </div>
-          </div>
-
-          <!-- Daily Earning Metrics -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-            <div style="background: #0F172A; padding: 1rem; border-radius: 12px; border: 1px solid var(--card-border);">
-              <div style="font-size: 0.75rem; color: var(--text-muted);">Today's Earnings</div>
-              <div style="font-size: 1.5rem; font-weight: 800; color: var(--success); font-family: var(--font-mono);">₹1,840</div>
-              <div style="font-size: 0.7rem; color: #94A3B8;">6 completed trips</div>
-            </div>
-            <div style="background: #0F172A; padding: 1rem; border-radius: 12px; border: 1px solid var(--card-border);">
-              <div style="font-size: 0.75rem; color: var(--text-muted);">Performance Rating</div>
-              <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary); font-family: var(--font-mono);">4.92 ★</div>
-              <div style="font-size: 0.7rem; color: #94A3B8;">98% on-time rate</div>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Driver Map & GPS Guidance -->
-        <div class="panel-card">
-          <div class="panel-header">
-            <span class="panel-title">🛰️ Driver Navigation GPS</span>
-            <span style="font-size: 0.8rem; color: var(--text-muted);">Live Coordinates: 12.9710° N, 77.6350° E</span>
-          </div>
-          <div style="background: #0F172A; border-radius: 12px; padding: 1.5rem; text-align: center; border: 1px dashed var(--card-border);">
-            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🧭</div>
-            <h3 style="color: #fff; margin-bottom: 0.3rem;">Next Turn: In 400m turn right onto Inner Ring Rd</h3>
-            <p style="color: var(--text-muted); font-size: 0.85rem;">Simulated driver navigation is transmitting live updates to the customer screen every 3 seconds.</p>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;" id="driver-accuracy">
+            Accuracy: -- meters
           </div>
         </div>
 
+        <button id="duty-btn" class="btn-cta" onclick="toggleDuty()">Go Online (Start GPS Tracking)</button>
       </div>
     </div>
 
-    <!-- TAB 3: ADMIN FLEET MANAGEMENT -->
+    <!-- ADMIN TAB -->
     <div id="tab-admin" class="tab-content">
       <div class="panel-card">
-        <div class="panel-header">
-          <span class="panel-title">🏢 Central Logistics Fleet Control</span>
-          <span class="status-badge">14 Drivers Active</span>
-        </div>
-
-        <!-- Metric KPI Cards -->
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
-          <div style="background: #0F172A; padding: 1rem; border-radius: 12px; border: 1px solid var(--card-border);">
-            <div style="font-size: 0.75rem; color: var(--text-muted);">Total Bookings Today</div>
-            <div style="font-size: 1.6rem; font-weight: 800; color: #fff;">184</div>
-          </div>
-          <div style="background: #0F172A; padding: 1rem; border-radius: 12px; border: 1px solid var(--card-border);">
-            <div style="font-size: 0.75rem; color: var(--text-muted);">Active In-Transit</div>
-            <div style="font-size: 1.6rem; font-weight: 800; color: var(--primary);">28</div>
-          </div>
-          <div style="background: #0F172A; padding: 1rem; border-radius: 12px; border: 1px solid var(--card-border);">
-            <div style="font-size: 0.75rem; color: var(--text-muted);">Total Revenue</div>
-            <div style="font-size: 1.6rem; font-weight: 800; color: var(--success); font-family: var(--font-mono);">₹52,890</div>
-          </div>
-          <div style="background: #0F172A; padding: 1rem; border-radius: 12px; border: 1px solid var(--card-border);">
-            <div style="font-size: 0.75rem; color: var(--text-muted);">KYC Verification Queue</div>
-            <div style="font-size: 1.6rem; font-weight: 800; color: #60A5FA;">3 Pending</div>
-          </div>
-        </div>
-
-        <!-- Driver KYC Verification Table -->
-        <h4 style="color: #fff; font-size: 0.95rem; margin-bottom: 0.5rem;">Driver Fleet & KYC Verification Directory</h4>
-        <table class="fleet-table">
+        <h2>Live Fleet Overview</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">Real-time active driver connections.</p>
+        
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
           <thead>
-            <tr>
-              <th>Driver Name</th>
-              <th>Vehicle Tier</th>
-              <th>Plate Number</th>
-              <th>KYC Status</th>
-              <th>Availability</th>
-              <th>Actions</th>
+            <tr style="border-bottom: 1px solid var(--card-border); color: var(--text-muted); font-size: 0.8rem;">
+              <th style="padding: 1rem;">Driver ID</th>
+              <th style="padding: 1rem;">Status</th>
+              <th style="padding: 1rem;">Live Location</th>
+              <th style="padding: 1rem;">Last Ping</th>
             </tr>
           </thead>
-          <tbody>
-            <tr>
-              <td><strong>Ramesh Kumar</strong></td>
-              <td>Tata Ace (1 Ton)</td>
-              <td>KA-01-EA-4421</td>
-              <td><span class="badge-approved">APPROVED</span></td>
-              <td><span class="badge-busy">IN TRANSIT</span></td>
-              <td><button class="btn-sm btn-reject">Deactivate</button></td>
-            </tr>
-            <tr>
-              <td><strong>Suresh Gowda</strong></td>
-              <td>Cargo 3W Auto</td>
-              <td>KA-04-B-9981</td>
-              <td><span class="badge-approved">APPROVED</span></td>
-              <td><span class="badge-approved">ONLINE (IDLE)</span></td>
-              <td><button class="btn-sm btn-reject">Deactivate</button></td>
-            </tr>
-            <tr>
-              <td><strong>Manjunath R.</strong></td>
-              <td>Pickup 8ft Truck</td>
-              <td>KA-51-ME-1029</td>
-              <td><span class="badge-pending">PENDING AUDIT</span></td>
-              <td><span class="badge-pending">VERIFYING</span></td>
-              <td>
-                <button class="btn-sm btn-approve" onclick="alert('Driver KYC Approved')">Approve</button>
-                <button class="btn-sm btn-reject">Reject</button>
-              </td>
-            </tr>
-            <tr>
-              <td><strong>Venkatesh P.</strong></td>
-              <td>2-Wheeler Courier</td>
-              <td>KA-03-JJ-7788</td>
-              <td><span class="badge-approved">APPROVED</span></td>
-              <td><span class="badge-approved">ONLINE (IDLE)</span></td>
-              <td><button class="btn-sm btn-reject">Deactivate</button></td>
-            </tr>
+          <tbody id="admin-table-body">
+            <tr><td colspan="4" style="padding: 1rem; text-align: center; color: var(--text-muted);">No drivers currently broadcasting.</td></tr>
           </tbody>
         </table>
-
       </div>
     </div>
   </main>
 
-  <footer>
-    <p>Akhil Logistics Enterprise Platform • Jetpack Compose Android Client + Room Local Database + Firebase Auth & Realtime GPS Tracking</p>
-  </footer>
-
-  <!-- Interactive JavaScript Logic -->
   <script>
-    // State
-    let currentRole = 'customer';
-    let baseFare = 80;
-    let perKm = 22;
-    let selectedTierName = 'Tata Ace';
-    let distanceKm = 7.4;
-    let map, driverMarker, pickupMarker, dropoffMarker, routePolyline;
-    let progressRatio = 0.35;
-    let animInterval = null;
+    /* --- State Management --- */
+    const state = {
+      map: null,
+      routingControl: null,
+      markers: { pickup: null, dropoff: null, driver: null },
+      coords: { pickup: null, dropoff: null },
+      pricing: { base: 50, perKm: 8 },
+      routeData: { distance: 0, time: 0 },
+      driverTracking: { watchId: null, isOnline: false }
+    };
 
-    // Bangalore Coordinates
-    const pickupCoord = [12.9784, 77.6408];   // Indiranagar 100ft Rd
-    const dropoffCoord = [12.9352, 77.6245];  // Koramangala 4th Block
-    const midWaypoints = [
-      [12.9784, 77.6408],
-      [12.9690, 77.6390],
-      [12.9550, 77.6350],
-      [12.9420, 77.6310],
-      [12.9352, 77.6245]
-    ];
+    /* --- Initialization --- */
+    document.addEventListener('DOMContentLoaded', () => {
+      initMap();
+    });
 
     function switchRole(role) {
-      currentRole = role;
       document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-
-      if (role === 'customer') {
-        event.target.classList.add('active');
-        document.getElementById('tab-customer').classList.add('active');
-        setTimeout(() => { if (map) map.invalidateSize(); }, 200);
-      } else if (role === 'driver') {
-        event.target.classList.add('active');
-        document.getElementById('tab-driver').classList.add('active');
-      } else {
-        event.target.classList.add('active');
-        document.getElementById('tab-admin').classList.add('active');
-      }
-    }
-
-    function selectVehicle(tier, base, kmRate, cap, name) {
-      baseFare = base;
-      perKm = kmRate;
-      selectedTierName = name;
-
-      document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('selected'));
-      event.currentTarget.classList.add('selected');
-
-      recalcDistance();
-    }
-
-    function recalcDistance() {
-      const total = Math.round(baseFare + (distanceKm * perKm));
-      document.getElementById('total-fare-display').innerText = '₹' + total;
-      document.getElementById('route-summary').innerText = distanceKm + ' km • ~24 mins via Inner Ring Rd';
-      
-      // Update individual vehicle cards
-      document.getElementById('fare-bike').innerText = '₹' + Math.round(15 + (distanceKm * 7.5));
-      document.getElementById('fare-auto').innerText = '₹' + Math.round(40 + (distanceKm * 14));
-      document.getElementById('fare-tata').innerText = '₹' + Math.round(80 + (distanceKm * 22));
-      document.getElementById('fare-pickup').innerText = '₹' + Math.round(140 + (distanceKm * 28));
-      document.getElementById('fare-truck').innerText = '₹' + Math.round(220 + (distanceKm * 36));
-      document.getElementById('fare-heavy').innerText = '₹' + Math.round(350 + (distanceKm * 48));
+      event.target.classList.add('active');
+      document.getElementById(`tab-${role}`).classList.add('active');
+      if (role === 'customer' && state.map) setTimeout(() => state.map.invalidateSize(), 200);
     }
 
     function initMap() {
-      map = L.map('live-map', {
-        zoomControl: false,
-        attributionControl: false
-      }).setView([12.9568, 77.6326], 13);
-
-      // Dark style tile layer
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19
-      }).addTo(map);
-
-      // Markers
-      const greenIcon = L.divIcon({
-        className: 'custom-pin',
-        html: '<div style="background:#10B981; color:#fff; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; border:2px solid #fff; box-shadow:0 3px 8px rgba(0,0,0,0.4);">A</div>',
-        iconSize: [28, 28]
-      });
-
-      const redIcon = L.divIcon({
-        className: 'custom-pin',
-        html: '<div style="background:#EF4444; color:#fff; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; border:2px solid #fff; box-shadow:0 3px 8px rgba(0,0,0,0.4);">B</div>',
-        iconSize: [28, 28]
-      });
-
-      const truckIcon = L.divIcon({
-        className: 'custom-pin',
-        html: '<div style="background:#F59E0B; color:#0F172A; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; border:2.5px solid #fff; box-shadow:0 4px 12px rgba(245,158,11,0.5);">🚚</div>',
-        iconSize: [36, 36]
-      });
-
-      pickupMarker = L.marker(pickupCoord, { icon: greenIcon }).addTo(map).bindPopup("<b>Pickup:</b> Indiranagar 100ft Rd");
-      dropoffMarker = L.marker(dropoffCoord, { icon: redIcon }).addTo(map).bindPopup("<b>Dropoff:</b> Koramangala 4th Block");
-
-      // Polyline corridor
-      routePolyline = L.polyline(midWaypoints, {
-        color: '#F59E0B',
-        weight: 5,
-        opacity: 0.85,
-        dashArray: '1, 8'
-      }).addTo(map);
-
-      // Driver live marker
-      driverMarker = L.marker([12.9690, 77.6390], { icon: truckIcon }).addTo(map).bindPopup("<b>Driver Ramesh Kumar</b><br>Tata Ace KA-01-EA-4421");
-
-      startDriverSimulation();
+      state.map = L.map('map', { zoomControl: false }).setView([20.5937, 78.9629], 5); // Default India
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(state.map);
     }
 
-    // Driver Movement Simulation
-    function startDriverSimulation() {
-      if (animInterval) clearInterval(animInterval);
-      
-      let stepIndex = 1;
-      let fraction = 0;
+    /* --- Real-Time Geocoding (OpenStreetMap Nominatim) --- */
+    async function geocodeAddress(type) {
+      const input = document.getElementById(`${type}-input`).value;
+      if (!input) return;
 
-      animInterval = setInterval(() => {
-        fraction += 0.05;
-        if (fraction >= 1) {
-          fraction = 0;
-          stepIndex = (stepIndex + 1) % (midWaypoints.length - 1);
-        }
-
-        const p1 = midWaypoints[stepIndex];
-        const p2 = midWaypoints[stepIndex + 1];
-
-        const curLat = p1[0] + (p2[0] - p1[0]) * fraction;
-        const curLng = p1[1] + (p2[1] - p1[1]) * fraction;
-
-        driverMarker.setLatLng([curLat, curLng]);
-
-        const remKm = (distanceKm * (1 - (stepIndex + fraction) / midWaypoints.length)).toFixed(1);
-        const remMins = Math.max(1, Math.round(remKm * 3));
-
-        document.getElementById('telemetry-dist').innerText = remKm + ' km';
-        document.getElementById('telemetry-eta').innerText = remMins + ' mins';
-
-        if (remKm <= 0.5) {
-          document.getElementById('telemetry-status').innerText = 'Arriving at Destination';
+      document.getElementById('calc-status').innerText = 'Geocoding...';
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(input)}&limit=1`);
+        const data = await res.json();
+        
+        if (data.length > 0) {
+          const latlng = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+          setMarker(type, latlng, data[0].display_name);
         } else {
-          document.getElementById('telemetry-status').innerText = 'Driver En Route';
+          alert('Address not found. Please try a different query.');
         }
-      }, 800);
-    }
-
-    function startSimulatedBooking() {
-      alert("Order Confirmed! Driver Ramesh Kumar (Tata Ace KA-01-EA-4421) is 4 mins away from pickup.");
-      document.getElementById('telemetry-status').innerText = 'Driver Heading to Pickup';
-    }
-
-    function toggleDriverDuty() {
-      const btn = document.getElementById('toggle-duty-btn');
-      const badge = document.getElementById('driver-duty-badge');
-      if (btn.innerText === 'Go Offline') {
-        btn.innerText = 'Go Online';
-        btn.className = 'btn-sm btn-reject';
-        badge.innerHTML = '<span style="width:8px;height:8px;background:#94A3B8;border-radius:50%;display:inline-block;"></span> OFFLINE';
-        badge.style.color = '#94A3B8';
-        badge.style.borderColor = 'rgba(148,163,184,0.3)';
-      } else {
-        btn.innerText = 'Go Offline';
-        btn.className = 'btn-sm btn-approve';
-        badge.innerHTML = '<span class="status-pulse"></span> ONLINE';
-        badge.style.color = 'var(--success)';
-        badge.style.borderColor = 'rgba(16,185,129,0.3)';
+      } catch (err) {
+        console.error(err);
+        alert('Geocoding failed. Check network connection.');
       }
     }
 
-    function updateDriverStage(stage) {
-      alert("Driver status updated to: " + stage);
-      document.getElementById('telemetry-status').innerText = stage;
+    /* --- HTML5 Geolocation (Real-Time GPS) --- */
+    function useDeviceLocation(type) {
+      if (!navigator.geolocation) return alert('Geolocation not supported by your browser.');
+      
+      document.getElementById('calc-status').innerText = 'Getting GPS...';
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const latlng = [pos.coords.latitude, pos.coords.longitude];
+          setMarker(type, latlng, "Current GPS Location");
+          
+          // Reverse geocode to update input text
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng[0]}&lon=${latlng[1]}`);
+            const data = await res.json();
+            document.getElementById(`${type}-input`).value = data.display_name || "GPS Location";
+          } catch (e) {}
+        },
+        (err) => { alert('GPS Permission denied or unavailable.'); },
+        { enableHighAccuracy: true }
+      );
     }
 
-    // Initialize on load
-    window.addEventListener('DOMContentLoaded', () => {
-      initMap();
-      recalcDistance();
-    });
+    /* --- Leaflet Routing Machine (Real Routes) --- */
+    function setMarker(type, latlng, popupText) {
+      state.coords[type] = latlng;
+      
+      if (state.markers[type]) state.map.removeLayer(state.markers[type]);
+      
+      const iconColor = type === 'pickup' ? '#10B981' : '#EF4444';
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="background:${iconColor}; width:20px; height:20px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 10px rgba(0,0,0,0.5);"></div>`,
+        iconSize: [20, 20]
+      });
+
+      state.markers[type] = L.marker(latlng, { icon }).addTo(state.map).bindPopup(popupText);
+      state.map.setView(latlng, 14);
+
+      if (state.coords.pickup && state.coords.dropoff) calculateRealRoute();
+    }
+
+    function calculateRealRoute() {
+      document.getElementById('calc-status').innerText = 'Calculating Route...';
+      document.getElementById('btn-loader').style.display = 'inline-block';
+      document.getElementById('btn-text').innerText = 'Routing...';
+
+      if (state.routingControl) state.map.removeControl(state.routingControl);
+
+      state.routingControl = L.Routing.control({
+        waypoints: [ L.latLng(state.coords.pickup), L.latLng(state.coords.dropoff) ],
+        router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
+        lineOptions: { styles: [{ color: '#F59E0B', weight: 4, opacity: 0.8 }] },
+        createMarker: () => null, // Hide default routing markers
+        show: false, addWaypoints: false, fitSelectedRoutes: true
+      }).addTo(state.map);
+
+      state.routingControl.on('routesfound', function(e) {
+        const routes = e.routes;
+        const summary = routes[0].summary;
+        
+        state.routeData.distance = (summary.totalDistance / 1000).toFixed(1); // km
+        state.routeData.time = Math.round(summary.totalTime % 3600 / 60); // mins
+
+        updatePricingUI();
+        
+        document.getElementById('calc-status').innerText = 'Route Ready';
+        document.getElementById('hud-status').innerText = 'Route Mapped';
+        document.getElementById('hud-dist').innerText = `${state.routeData.distance} km`;
+        document.getElementById('hud-eta').innerText = `${state.routeData.time} min`;
+        
+        document.getElementById('btn-loader').style.display = 'none';
+        document.getElementById('btn-text').innerText = 'Confirm & Dispatch';
+        document.getElementById('book-btn').disabled = false;
+      });
+
+      state.routingControl.on('routingerror', function() {
+        document.getElementById('calc-status').innerText = 'Routing failed.';
+        document.getElementById('btn-loader').style.display = 'none';
+        document.getElementById('btn-text').innerText = 'Error calculating route';
+      });
+    }
+
+    /* --- Dynamic Pricing --- */
+    function selectVehicle(id, base, perKm) {
+      document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('selected'));
+      document.getElementById(`v-${id}`).classList.add('selected');
+      state.pricing = { base, perKm };
+      if (state.routeData.distance > 0) updatePricingUI();
+    }
+
+    function updatePricingUI() {
+      const dist = state.routeData.distance;
+      
+      // Update individual cards
+      document.getElementById('fare-bike').innerText = '₹' + Math.round(50 + (dist * 8));
+      document.getElementById('fare-auto').innerText = '₹' + Math.round(100 + (dist * 15));
+      document.getElementById('fare-tata').innerText = '₹' + Math.round(250 + (dist * 25));
+
+      // Update total
+      const total = Math.round(state.pricing.base + (dist * state.pricing.perKm));
+      document.getElementById('total-fare').innerText = `₹${total}`;
+      document.getElementById('route-summary').innerText = `${dist} km • ~${state.routeData.time} mins`;
+    }
+
+    function confirmBooking() {
+      alert(`Booking Confirmed! Fare: ${document.getElementById('total-fare').innerText}. Dispatching nearest driver...`);
+      document.getElementById('hud-status').innerText = 'Driver Dispatched';
+      document.getElementById('book-btn').innerText = 'Finding Driver...';
+      document.getElementById('book-btn').disabled = true;
+    }
+
+    /* --- Driver Real-Time Tracking --- */
+    function toggleDuty() {
+      const btn = document.getElementById('duty-btn');
+      
+      if (state.driverTracking.isOnline) {
+        // Stop Tracking
+        navigator.geolocation.clearWatch(state.driverTracking.watchId);
+        state.driverTracking.isOnline = false;
+        btn.innerText = 'Go Online (Start GPS Tracking)';
+        btn.style.background = 'var(--primary)';
+        document.getElementById('driver-coords').innerText = 'Lat: --.----, Lng: --.----';
+        document.getElementById('admin-table-body').innerHTML = `<tr><td colspan="4" style="padding: 1rem; text-align: center; color: var(--text-muted);">Driver went offline.</td></tr>`;
+      } else {
+        // Start Tracking
+        if (!navigator.geolocation) return alert('Geolocation unsupported.');
+        
+        btn.innerText = 'Go Offline (Stop Broadcasting)';
+        btn.style.background = 'var(--danger)';
+        state.driverTracking.isOnline = true;
+
+        state.driverTracking.watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            const lat = pos.coords.latitude.toFixed(5);
+            const lng = pos.coords.longitude.toFixed(5);
+            
+            // Update Driver UI
+            document.getElementById('driver-coords').innerText = `Lat: ${lat}, Lng: ${lng}`;
+            document.getElementById('driver-accuracy').innerText = `Accuracy: ±${Math.round(pos.coords.accuracy)} meters`;
+
+            // Update Admin UI (Simulating WebSocket broadcast)
+            const time = new Date().toLocaleTimeString();
+            document.getElementById('admin-table-body').innerHTML = `
+              <tr>
+                <td style="padding: 1rem; color: #fff; font-weight: bold;">DRV-001</td>
+                <td style="padding: 1rem;"><span style="background: rgba(16,185,129,0.2); color: var(--success); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700;">LIVE</span></td>
+                <td style="padding: 1rem; font-family: monospace;">${lat}, ${lng}</td>
+                <td style="padding: 1rem; color: var(--text-muted);">${time}</td>
+              </tr>
+            `;
+          },
+          (err) => { alert('Failed to get GPS location.'); },
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+        );
+      }
+    }
   </script>
 </body>
 </html>

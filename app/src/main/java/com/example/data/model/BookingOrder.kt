@@ -1,40 +1,99 @@
 package com.example.data.model
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+
+/**
+ * Type-safe states for the order lifecycle.
+ * Room automatically converts these to/from Strings in the database.
+ */
+enum class OrderStatus {
+    PENDING,
+    SEARCHING,
+    DRIVER_ASSIGNED,
+    IN_TRANSIT,
+    DELIVERED,
+    CANCELLED
+}
 
 @Entity(tableName = "orders")
 data class BookingOrder(
     @PrimaryKey
+    @ColumnInfo(name = "id")
     val id: String,
+
+    // --- Customer Details ---
+    @ColumnInfo(name = "customer_phone")
     val customerPhone: String,
+    @ColumnInfo(name = "customer_name")
     val customerName: String,
+
+    // --- Location: Pickup ---
+    @ColumnInfo(name = "pickup_address")
     val pickupAddress: String,
-    val dropoffAddress: String,
+    @ColumnInfo(name = "pickup_place_id")
     val pickupPlaceId: String? = null,
+    @ColumnInfo(name = "pickup_lat")
+    val pickupLat: Double = 0.0,
+    @ColumnInfo(name = "pickup_lng")
+    val pickupLng: Double = 0.0,
+
+    // --- Location: Dropoff ---
+    @ColumnInfo(name = "dropoff_address")
+    val dropoffAddress: String,
+    @ColumnInfo(name = "dropoff_place_id")
     val dropoffPlaceId: String? = null,
-    val pickupLat: Double = 12.9784,
-    val pickupLng: Double = 77.6408,
-    val dropoffLat: Double = 12.9352,
-    val dropoffLng: Double = 77.6245,
+    @ColumnInfo(name = "dropoff_lat")
+    val dropoffLat: Double = 0.0,
+    @ColumnInfo(name = "dropoff_lng")
+    val dropoffLng: Double = 0.0,
+
+    // --- Vehicle & Goods Details ---
+    @ColumnInfo(name = "vehicle_tier_id")
     val vehicleTierId: String,
+    @ColumnInfo(name = "vehicle_name")
     val vehicleName: String,
+    @ColumnInfo(name = "goods_type")
     val goodsType: String,
-    val helperRequired: Boolean,
-    val helperFee: Double,
-    val fare: Double,
-    val distanceKm: Double,
-    val actualRoadKm: Double = distanceKm,
+    
+    // --- Routing & Pricing ---
+    @ColumnInfo(name = "routing_profile")
+    val routingProfile: String = "DEFAULT",
+    @ColumnInfo(name = "route_summary")
     val routeSummary: String = "",
-    val routingProfile: String = "TATA_ACE_COMMERCIAL",
+    @ColumnInfo(name = "distance_km")
+    val distanceKm: Double,
+    @ColumnInfo(name = "actual_road_km")
+    val actualRoadKm: Double = 0.0,
+    @ColumnInfo(name = "fare")
+    val fare: Double,
+    @ColumnInfo(name = "helper_required")
+    val helperRequired: Boolean = false,
+    @ColumnInfo(name = "helper_fee")
+    val helperFee: Double = 0.0,
+    @ColumnInfo(name = "payment_method")
     val paymentMethod: String,
-    val status: String, // SEARCHING, DRIVER_ASSIGNED, IN_TRANSIT, DELIVERED, CANCELLED
-    val driverName: String = "Ravi Kumar",
-    val driverPhone: String = "+91 98452 11094",
-    val driverRating: Double = 4.88,
-    val driverVehicleNumber: String = "KA 05 MX 2190",
-    val startOtp: String = "4821",
+
+    // --- Status & Metadata ---
+    @ColumnInfo(name = "status")
+    val status: OrderStatus = OrderStatus.PENDING,
+    @ColumnInfo(name = "start_otp")
+    val startOtp: String? = null,
+    @ColumnInfo(name = "eta_minutes")
+    val etaMinutes: Int? = null,
+    @ColumnInfo(name = "timestamp")
     val timestamp: Long = System.currentTimeMillis(),
-    val etaMinutes: Int = 12,
-    val assignedDriverId: String? = null
+
+    // --- Assigned Driver Details (Nullable for unassigned orders) ---
+    @ColumnInfo(name = "assigned_driver_id")
+    val assignedDriverId: String? = null,
+    @ColumnInfo(name = "driver_name")
+    val driverName: String? = null,
+    @ColumnInfo(name = "driver_phone")
+    val driverPhone: String? = null,
+    @ColumnInfo(name = "driver_rating")
+    val driverRating: Double? = null,
+    @ColumnInfo(name = "driver_vehicle_number")
+    val driverVehicleNumber: String? = null
 )

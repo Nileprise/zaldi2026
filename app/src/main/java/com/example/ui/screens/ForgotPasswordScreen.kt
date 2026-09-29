@@ -1,60 +1,45 @@
 package com.example.ui.screens
 
+import android.content.res.Configuration
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mail
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.ui.theme.AmberPrimary
-import com.example.ui.theme.BorderLight
-import com.example.ui.theme.SuccessGreen
-import com.example.ui.theme.SurfaceCard
-import com.example.ui.theme.SurfaceLight
-import com.example.ui.theme.SurfaceTertiary
-import com.example.ui.theme.TextDark
-import com.example.ui.theme.TextMuted
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private enum class ForgotStep {
     ENTER_EMAIL,
@@ -63,6 +48,7 @@ private enum class ForgotStep {
     SUCCESS
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForgotPasswordScreen(
     onResetSuccess: (email: String, newPassword: String) -> Unit,
@@ -74,325 +60,371 @@ fun ForgotPasswordScreen(
     var otp by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-    var errorMessage by remember { mutableStateOf("") }
-    var successMessage by remember { mutableStateOf("") }
+    
+    var passwordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
+    
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var successMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
-    var otpSent by remember { mutableStateOf(false) }
+
+    val coroutineScope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // ============================================================================
+    // Real-time Mock API Functions (In production, these call the ViewModel)
+    // ============================================================================
 
     fun sendOTP() {
+        focusManager.clearFocus()
+        keyboardController?.hide()
         if (email.isBlank() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
             errorMessage = "Please enter a valid email address"
             return
         }
-        errorMessage = ""
+        errorMessage = null
         isLoading = true
-        successMessage = "OTP sent to $email. Check your email for the demo OTP: 123456"
-        otpSent = true
-        isLoading = false
+        
+        // Simulate real API latency
+        coroutineScope.launch {
+            delay(1200) 
+            isLoading = false
+            successMessage = "Secure OTP sent to $email. Please check your inbox."
+            step = ForgotStep.VERIFY_OTP
+        }
     }
 
     fun verifyOTP() {
-        if (otp.isBlank()) {
-            errorMessage = "Please enter the OTP"
+        focusManager.clearFocus()
+        keyboardController?.hide()
+        if (otp.length < 6) {
+            errorMessage = "Please enter the 6-digit OTP code"
             return
         }
-        if (otp != "123456") {
-            errorMessage = "Invalid OTP. Use demo code: 123456"
-            return
+        errorMessage = null
+        isLoading = true
+        
+        // Simulate real API token verification
+        coroutineScope.launch {
+            delay(1200)
+            isLoading = false
+            successMessage = "Identity verified successfully."
+            step = ForgotStep.RESET_PASSWORD
         }
-        errorMessage = ""
-        step = ForgotStep.RESET_PASSWORD
     }
 
     fun resetPassword() {
+        focusManager.clearFocus()
+        keyboardController?.hide()
         when {
-            newPassword.isBlank() -> errorMessage = "Password is required"
-            newPassword.length < 6 -> errorMessage = "Password must be at least 6 characters"
+            newPassword.length < 8 -> errorMessage = "Password must be at least 8 characters"
             newPassword != confirmPassword -> errorMessage = "Passwords do not match"
             else -> {
-                errorMessage = ""
+                errorMessage = null
                 isLoading = true
-                step = ForgotStep.SUCCESS
-                successMessage = "Password reset successfully. Redirecting to login..."
-                onResetSuccess(email, newPassword)
+                
+                // Simulate real API password update
+                coroutineScope.launch {
+                    delay(1500)
+                    isLoading = false
+                    step = ForgotStep.SUCCESS
+                    successMessage = "Password reset successfully. Redirecting to login..."
+                }
             }
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(SurfaceLight)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBackToLogin) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-            }
-            Text(
-                text = "Reset Password",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextDark,
-                modifier = Modifier.weight(1f).padding(start = 8.dp)
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text("Reset Password", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBackToLogin) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Login")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = when (step) {
-                ForgotStep.ENTER_EMAIL -> "Enter your email to receive a password reset code"
-                ForgotStep.VERIFY_OTP -> "Enter the code sent to your email"
-                ForgotStep.RESET_PASSWORD -> "Create a new password"
-                ForgotStep.SUCCESS -> "Password reset successfully!"
-            },
-            fontSize = 13.sp,
-            color = TextMuted,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                if (step == ForgotStep.ENTER_EMAIL || step == ForgotStep.VERIFY_OTP || step == ForgotStep.RESET_PASSWORD) {
-                    if (step == ForgotStep.ENTER_EMAIL || step == ForgotStep.VERIFY_OTP || step == ForgotStep.RESET_PASSWORD) {
-                        Text(
-                            text = "Email Address",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextDark
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            modifier = Modifier.fillMaxWidth().testTag("forgot_email_input"),
-                            leadingIcon = { Icon(Icons.Default.Mail, contentDescription = null, tint = AmberPrimary) },
-                            placeholder = { Text("john@example.com", color = TextMuted) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                            enabled = step == ForgotStep.ENTER_EMAIL,
-                            singleLine = true,
-                            shape = RoundedCornerShape(10.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = AmberPrimary,
-                                unfocusedBorderColor = BorderLight,
-                                focusedContainerColor = SurfaceTertiary,
-                                unfocusedContainerColor = SurfaceTertiary
-                            )
-                        )
-                    }
-                }
+            
+            // Dynamic Header Text
+            Text(
+                text = when (step) {
+                    ForgotStep.ENTER_EMAIL -> "Enter your registered email address to receive a secure password reset code."
+                    ForgotStep.VERIFY_OTP -> "We've sent a 6-digit verification code to your email."
+                    ForgotStep.RESET_PASSWORD -> "Create a strong new password for your account."
+                    ForgotStep.SUCCESS -> "Your account is now secure."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
+            )
 
-                if (step == ForgotStep.VERIFY_OTP || step == ForgotStep.RESET_PASSWORD) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(
-                        text = "OTP Code",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextDark
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = otp,
-                        onValueChange = { otp = it.filter { ch -> ch.isDigit() }.take(6) },
-                        modifier = Modifier.fillMaxWidth().testTag("forgot_otp_input"),
-                        placeholder = { Text("6-digit code", color = TextMuted) },
-                        enabled = step == ForgotStep.VERIFY_OTP,
-                        singleLine = true,
-                        shape = RoundedCornerShape(10.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AmberPrimary,
-                            unfocusedBorderColor = BorderLight,
-                            focusedContainerColor = SurfaceTertiary,
-                            unfocusedContainerColor = SurfaceTertiary
-                        )
-                    )
-                    if (step == ForgotStep.VERIFY_OTP) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Demo OTP: 123456",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AmberPrimary
-                        )
-                    }
-                }
-
-                if (step == ForgotStep.RESET_PASSWORD) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(
-                        text = "New Password",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextDark
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = newPassword,
-                        onValueChange = { newPassword = it },
-                        modifier = Modifier.fillMaxWidth().testTag("forgot_new_password_input"),
-                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = AmberPrimary) },
-                        placeholder = { Text("Min 6 characters", color = TextMuted) },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(10.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AmberPrimary,
-                            unfocusedBorderColor = BorderLight,
-                            focusedContainerColor = SurfaceTertiary,
-                            unfocusedContainerColor = SurfaceTertiary
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Confirm Password",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextDark
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = confirmPassword,
-                        onValueChange = { confirmPassword = it },
-                        modifier = Modifier.fillMaxWidth().testTag("forgot_confirm_password_input"),
-                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = AmberPrimary) },
-                        placeholder = { Text("Re-enter password", color = TextMuted) },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(10.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AmberPrimary,
-                            unfocusedBorderColor = BorderLight,
-                            focusedContainerColor = SurfaceTertiary,
-                            unfocusedContainerColor = SurfaceTertiary
-                        )
-                    )
-                }
-
-                if (errorMessage.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = errorMessage,
-                        fontSize = 11.sp,
-                        color = Color(0xFFEF4444),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                if (successMessage.isNotBlank() && step != ForgotStep.SUCCESS) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = successMessage,
-                        fontSize = 11.sp,
-                        color = SuccessGreen,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        // Action Buttons
-        when (step) {
-            ForgotStep.ENTER_EMAIL -> {
-                Button(
-                    onClick = { sendOTP() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("forgot_send_otp_button"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AmberPrimary),
-                    enabled = !isLoading
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
-                    } else {
-                        Text("Send OTP", fontWeight = FontWeight.Bold, color = Color.White)
-                    }
-                }
-            }
-            ForgotStep.VERIFY_OTP -> {
-                Button(
-                    onClick = { verifyOTP() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("forgot_verify_otp_button"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AmberPrimary),
-                    enabled = !isLoading
-                ) {
-                    Text("Verify OTP", fontWeight = FontWeight.Bold, color = Color.White)
-                }
-                Spacer(modifier = Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = { step = ForgotStep.ENTER_EMAIL },
+            // Animated Form Container
+            AnimatedContent(
+                targetState = step,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+                },
+                label = "form_step_animation"
+            ) { currentStep ->
+                OutlinedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Text("Back", fontWeight = FontWeight.Bold)
-                }
-            }
-            ForgotStep.RESET_PASSWORD -> {
-                Button(
-                    onClick = { resetPassword() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("forgot_reset_password_button"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AmberPrimary),
-                    enabled = !isLoading
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Reset Password", fontWeight = FontWeight.Bold, color = Color.White)
-                            Spacer(modifier = Modifier.size(8.dp))
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.White)
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        when (currentStep) {
+                            ForgotStep.ENTER_EMAIL -> {
+                                OutlinedTextField(
+                                    value = email,
+                                    onValueChange = { 
+                                        email = it
+                                        errorMessage = null 
+                                    },
+                                    label = { Text("Email Address") },
+                                    placeholder = { Text("john@example.com") },
+                                    leadingIcon = { Icon(Icons.Default.Mail, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                    modifier = Modifier.fillMaxWidth().testTag("forgot_email_input"),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { sendOTP() }),
+                                    singleLine = true,
+                                    isError = errorMessage != null,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                            }
+
+                            ForgotStep.VERIFY_OTP -> {
+                                OutlinedTextField(
+                                    value = otp,
+                                    onValueChange = { 
+                                        otp = it.filter { ch -> ch.isDigit() }.take(6)
+                                        errorMessage = null
+                                    },
+                                    label = { Text("6-Digit OTP Code") },
+                                    placeholder = { Text("000000") },
+                                    modifier = Modifier.fillMaxWidth().testTag("forgot_otp_input"),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { verifyOTP() }),
+                                    singleLine = true,
+                                    isError = errorMessage != null,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                            }
+
+                            ForgotStep.RESET_PASSWORD -> {
+                                OutlinedTextField(
+                                    value = newPassword,
+                                    onValueChange = { 
+                                        newPassword = it
+                                        errorMessage = null
+                                    },
+                                    label = { Text("New Password") },
+                                    placeholder = { Text("Min 8 characters") },
+                                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                            Icon(
+                                                imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                                contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                                            )
+                                        }
+                                    },
+                                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    modifier = Modifier.fillMaxWidth().testTag("forgot_new_password_input"),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+                                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+                                    singleLine = true,
+                                    isError = errorMessage != null,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+
+                                OutlinedTextField(
+                                    value = confirmPassword,
+                                    onValueChange = { 
+                                        confirmPassword = it
+                                        errorMessage = null
+                                    },
+                                    label = { Text("Confirm Password") },
+                                    placeholder = { Text("Re-enter new password") },
+                                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                                            Icon(
+                                                imageVector = if (confirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                                contentDescription = if (confirmPasswordVisible) "Hide password" else "Show password"
+                                            )
+                                        }
+                                    },
+                                    visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    modifier = Modifier.fillMaxWidth().testTag("forgot_confirm_password_input"),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { resetPassword() }),
+                                    singleLine = true,
+                                    isError = errorMessage != null,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                            }
+                            
+                            ForgotStep.SUCCESS -> {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "Success",
+                                        tint = Color(0xFF059669), // Success Green
+                                        modifier = Modifier.size(64.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "Password Reset Complete!",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+
+                        // Status Messages
+                        if (errorMessage != null) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.ErrorOutline, contentDescription = "Error", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = errorMessage!!, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                            }
+                        } else if (successMessage != null && currentStep != ForgotStep.SUCCESS) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = "Success", tint = Color(0xFF059669), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = successMessage!!, style = MaterialTheme.typography.labelMedium, color = Color(0xFF059669))
+                            }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = { step = ForgotStep.VERIFY_OTP },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Back", fontWeight = FontWeight.Bold)
-                }
             }
-            ForgotStep.SUCCESS -> {
-                Button(
-                    onClick = onBackToLogin,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
-                ) {
-                    Text("Back to Login", fontWeight = FontWeight.Bold, color = Color.White)
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // ============================================================================
+            // Action Buttons
+            // ============================================================================
+            when (step) {
+                ForgotStep.ENTER_EMAIL -> {
+                    Button(
+                        onClick = { sendOTP() },
+                        modifier = Modifier.fillMaxWidth().height(52.dp).testTag("forgot_send_otp_button"),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isLoading
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                        } else {
+                            Text("Send Secure OTP", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                ForgotStep.VERIFY_OTP -> {
+                    Button(
+                        onClick = { verifyOTP() },
+                        modifier = Modifier.fillMaxWidth().height(52.dp).testTag("forgot_verify_otp_button"),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isLoading
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                        } else {
+                            Text("Verify Token", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { 
+                            step = ForgotStep.ENTER_EMAIL 
+                            errorMessage = null
+                            successMessage = null
+                        },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isLoading
+                    ) {
+                        Text("Change Email Address")
+                    }
+                }
+                ForgotStep.RESET_PASSWORD -> {
+                    Button(
+                        onClick = { resetPassword() },
+                        modifier = Modifier.fillMaxWidth().height(52.dp).testTag("forgot_reset_password_button"),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isLoading
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                        } else {
+                            Text("Update Password", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { 
+                            step = ForgotStep.VERIFY_OTP 
+                            errorMessage = null
+                        },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isLoading
+                    ) {
+                        Text("Back to OTP")
+                    }
+                }
+                ForgotStep.SUCCESS -> {
+                    Button(
+                        onClick = { onResetSuccess(email, newPassword) },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669))
+                    ) {
+                        Text("Return to Login", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
                 }
             }
         }
+    }
+}
+
+// ============================================================================
+// UI Previews
+// ============================================================================
+
+@Preview(name = "Light Mode", showBackground = true)
+@Preview(name = "Dark Mode", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true)
+@Composable
+private fun ForgotPasswordScreenPreview() {
+    MaterialTheme {
+        ForgotPasswordScreen(
+            onResetSuccess = { _, _ -> },
+            onBackToLogin = {}
+        )
     }
 }

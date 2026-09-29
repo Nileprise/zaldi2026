@@ -37,3 +37,23 @@ val Emerald300 = Color(0xFF6EE7B7) // Success (Dark Mode)
 val Amber100 = Color(0xFFFEF3C7)
 val Amber600 = Color(0xFFD97706)
 val Amber300 = Color(0xFFFCD34D) // Warning (Dark Mode)
+package com.example.ui.theme
+
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+
+object SemanticColors {
+    val success: Color
+        @Composable get() = if (isSystemInDarkTheme()) Emerald300 else Emerald600
+        
+    val successContainer: Color
+        @Composable get() = if (isSystemInDarkTheme()) Emerald600.copy(alpha = 0.2f) else Emerald100
+
+    val warning: Color
+        @Composable get() = if (isSystemInDarkTheme()) Amber300 else Amber600
+        
+    val warningContainer: Color
+        @Composable get() = if (isSystemInDarkTheme()) Amber600.copy(alpha = 0.2f) else Amber100
+}
+

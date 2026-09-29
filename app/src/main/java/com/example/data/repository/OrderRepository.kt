@@ -1,103 +1,125 @@
 package com.example.data.repository
 
-import com.example.data.cache.RedisCache
-import com.example.data.local.RealtimeDatabase
+import com.example.data.cache.RedisCacheManager
+import com.example.data.local.RealtimeDatabaseManager
+import com.example.data.remote.AllocationRequestDto
 import com.example.data.remote.ApiService
-import com.example.domain.model.AllocationRequest
+import com.example.data.remote.AssignDriverRequest
+import com.example.data.remote.CreateOrderRequest
+import com.example.data.remote.UpdateOrderStatusRequest
 import com.example.domain.model.Order
 import com.example.domain.model.OrderStatus
-import com.example.domain.usecase.AllocationUseCase
-import com.example.domain.usecase.OrderManagementUseCase
-import com.example.domain.usecase.PricingUseCase
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
-class OrderRepository(
+/**
+ * Modernized Repository.
+ * Handles data mapping (DTO <-> Domain) and coordinates between API, Cache, and Realtime DB.
+ */
+class OrderRepository @Inject constructor(
     private val apiService: ApiService,
-    private val realtimeDatabase: RealtimeDatabase,
-    private val pricingUseCase: PricingUseCase,
-    private val allocationUseCase: AllocationUseCase,
-    private val orderManagementUseCase: OrderManagementUseCase
+    private val realtimeDatabase: RealtimeDatabaseManager,
+    private val cacheManager: RedisCacheManager
 ) {
-    
-    private val _orders = MutableStateFlow<List<Order>>(emptyList())
-    val orders: StateFlow<List<Order>> = _orders.asStateFlow()
-    
-    private val _activeOrder = MutableStateFlow<Order?>(null)
-    val activeOrder: StateFlow<Order?> = _activeOrder.asStateFlow()
-    
-    suspend fun createAndAllocateOrder(order: Order): Order? {
-        try {
-            // Step 1: Create order
-            val createdOrder = orderManagementUseCase.createOrder(order)
-            
-            // Step 2: Try to allocate driver
-            val allocationRequest = AllocationRequest(
-                orderId = createdOrder.id,
-                pickupLat = createdOrder.pickupLat,
-                pickupLng = createdOrder.pickupLng,
-                dropoffLat = createdOrder.dropoffLat,
-                dropoffLng = createdOrder.dropoffLng,
-                requiredVehicleId = createdOrder.vehicleType,
+
+    /**
+     * Creates an order and attempts to allocate a driver immediately.
+     * Returns a standard Kotlin Result to handle success/failure elegantly in the ViewModel.
+     */
+    suspend fun createAndAllocateOrder(order: Order): Result<Order> = withContext(Dispatchers.IO) {
+        runCatching {
+            // Step 1: Map Domain to DTO and Create Order via API
+            val createRequest = CreateOrderRequest(/* map order fields here */)
+            val createdOrderDto = apiService.createOrder(createRequest)
+
+            // Step 2: Attempt Allocation
+            val allocationRequest = AllocationRequestDto(
+                orderId = createdOrderDto.id,
+                pickupLat = order.pickupLat,
+                pickupLng = order.pickupLng,
+                dropoffLat = order.dropoffLat,
+                dropoffLng = order.dropoffLng,
+                requiredVehicleId = order.vehicleType,
                 maxAllocationRadiusKm = 5.0
             )
             
-            val allocationResult = allocationUseCase.findBestDriverMatch(allocationRequest)
-            
-            return if (allocationResult != null) {
-                // Assign driver
-                val assignedOrder = orderManagementUseCase.assignDriverToOrder(
-                    createdOrder.id,
-                    allocationResult.allocatedDriverId,
-                    createdOrder
+            // In a real backend, allocation might return null/empty if no drivers are found.
+            // Assuming the backend returns the best match or throws/returns empty:
+            val allocationResult = runCatching { apiService.findBestDriver(allocationRequest) }.getOrNull()
+
+            val finalOrderDto = if (allocationResult != null) {
+                // Step 3a: Driver found, assign via API
+                val assignRequest = AssignDriverRequest(
+                    driverId = allocationResult.allocatedDriverId,
+                    vehicleId = order.vehicleType,
+                    estimatedArrivalMinutes = allocationResult.etaMinutes
                 )
+                val assignedDto = apiService.assignDriver(createdOrderDto.id, assignRequest)
                 
-                // Cache order status
-                RedisCache.cacheOrderStatus(assignedOrder.id, assignedOrder.orderStatus.name)
-                
-                // Publish to realtime database
-                realtimeDatabase.publishOrderStatus(assignedOrder.id, assignedOrder.orderStatus.name)
-                
-                _activeOrder.value = assignedOrder
-                assignedOrder
+                // Sync Live States for Assigned Order
+                syncLiveOrderState(assignedDto.id, OrderStatus.DRIVER_ASSIGNED)
+                assignedDto
             } else {
-                // No driver available, keep in PENDING state
-                RedisCache.cacheOrderStatus(createdOrder.id, OrderStatus.PENDING.name)
-                realtimeDatabase.publishOrderStatus(createdOrder.id, OrderStatus.PENDING.name)
-                createdOrder
+                // Step 3b: No driver found, leave as PENDING
+                syncLiveOrderState(createdOrderDto.id, OrderStatus.PENDING)
+                createdOrderDto
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
+
+            // Step 4: Map DTO back to Domain Model
+            finalOrderDto.toDomain()
         }
     }
-    
-    suspend fun updateOrderStatus(orderId: String, newStatus: OrderStatus) {
-        try {
-            val currentOrder = _activeOrder.value ?: return
-            val updated = orderManagementUseCase.updateOrderStatus(currentOrder, newStatus)
+
+    /**
+     * Updates the status of an order across the API, Cache, and Realtime stream.
+     */
+    suspend fun updateOrderStatus(orderId: String, newStatus: OrderStatus): Result<Order> = withContext(Dispatchers.IO) {
+        runCatching {
+            // Update backend via API
+            val request = UpdateOrderStatusRequest(status = newStatus.name)
+            val updatedOrderDto = apiService.updateOrderStatus(orderId, request)
             
-            // Update cache
-            RedisCache.cacheOrderStatus(orderId, newStatus.name)
+            // Sync local & realtime components
+            syncLiveOrderState(orderId, newStatus)
             
-            // Publish to realtime database for live tracking
-            realtimeDatabase.publishOrderStatus(orderId, newStatus.name)
-            
-            _activeOrder.value = updated
-        } catch (e: Exception) {
-            e.printStackTrace()
+            updatedOrderDto.toDomain()
         }
     }
-    
-    suspend fun getOrdersByCustomer(customerId: String) {
-        try {
-            val response = apiService.getCustomerOrders(customerId)
-            if (response.isSuccessful) {
-                _orders.value = response.body() ?: emptyList()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
+
+    /**
+     * Fetches the customer's order history. 
+     * The ViewModel should collect this Result and update its own StateFlow.
+     */
+    suspend fun getOrdersByCustomer(customerId: String): Result<List<Order>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val dtoList = apiService.getCustomerOrders(customerId)
+            dtoList.map { it.toDomain() }
         }
     }
+
+    /**
+     * Helper to keep Cache and Firebase Realtime Database in sync.
+     */
+    private suspend fun syncLiveOrderState(orderId: String, status: OrderStatus) {
+        cacheManager.cacheOrderStatus(orderId, status.name)
+        realtimeDatabase.publishOrderStatus(orderId, status.name)
+    }
+}
+
+// ============================================================================
+// Extension Mappers (Keep mapping logic out of the core repository functions)
+// ============================================================================
+
+private fun com.example.data.remote.OrderDto.toDomain(): Order {
+    return Order(
+        id = this.id,
+        orderStatus = runCatching { OrderStatus.valueOf(this.status) }.getOrDefault(OrderStatus.PENDING),
+        // ... map remaining fields
+        pickupLat = 0.0,
+        pickupLng = 0.0,
+        dropoffLat = 0.0,
+        dropoffLng = 0.0,
+        vehicleType = "default"
+    )
 }

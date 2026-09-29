@@ -1,69 +1,146 @@
 package com.example.domain.model
 
 import com.example.data.model.UserRole
+import java.math.BigDecimal
+import java.time.Instant
+import java.time.ZoneId
+import kotlin.time.Duration
 
-// Fare Calculation Models
+// ============================================================================
+// Core Value Objects (Assuming Money and GeoCoordinate exist in your domain)
+// ============================================================================
+
+data class Money(
+    val amount: BigDecimal,
+    val currencyCode: String = "INR"
+)
+
+data class GeoCoordinate(
+    val lat: Double,
+    val lng: Double
+)
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum class SupplyLevel { CRITICAL, LOW, NORMAL, HIGH, EXCESS }
+enum class DemandLevel { VERY_LOW, LOW, NORMAL, HIGH, EXTREME }
+
+// ============================================================================
+// Fare Calculation Rules & Breakdowns
+// ============================================================================
+
+/**
+ * Detailed, auditable breakdown of a trip's cost.
+ * Essential for generating legal receipts and driver payout statements.
+ */
 data class FareBreakdown(
-    val baseAmount: Double,
-    val perKmAmount: Double,
+    val baseAmount: Money,
+    val distanceAmount: Money,
+    val timeAmount: Money, // Time-based fare (e.g., traffic delays)
     val distanceKm: Double,
-    val surgeMultiplier: Float = 1.0f,
-    val platformFeePercent: Float = 5f,
-    val taxPercent: Float = 5f,
-    val grossFare: Double,
-    val commission: Double,
-    val tax: Double,
-    val platformFee: Double,
-    val payableFare: Double
+    val surgeMultiplier: BigDecimal = BigDecimal.ONE,
+    
+    // Additional Logistics Fees
+    val tollsAmount: Money,
+    val waitingTimeFee: Money,
+    val discountAmount: Money,
+    
+    // Percentages stored as decimals (e.g., 0.05 for 5%)
+    val platformFeePercent: BigDecimal,
+    val taxPercent: BigDecimal,
+    
+    // Final calculated amounts
+    val grossFare: Money,
+    val commissionAmount: Money, // Driver's cut
+    val taxAmount: Money,
+    val platformFeeAmount: Money, // Company's cut
+    val finalPayableFare: Money
 )
 
 data class SurgeRule(
-    val minDemandRatio: Float, // demand / supply ratio
-    val maxDemandRatio: Float,
-    val multiplier: Float,
-    val validFrom: Long,
-    val validTo: Long
-)
+    val id: String,
+    val minDemandRatio: Double, // Demand / Supply ratio
+    val maxDemandRatio: Double,
+    val multiplier: BigDecimal,
+    val validFrom: Instant,
+    val validTo: Instant
+) {
+    fun isActive(atTime: Instant): Boolean {
+        return atTime.isAfter(validFrom) && atTime.isBefore(validTo)
+    }
+}
 
 data class VehiclePricingRule(
     val vehicleId: String,
     val vehicleName: String,
-    val baseFare: Double,
-    val perKmRate: Double,
-    val minimumFare: Double = 0.0,
+    val baseFare: Money,
+    val perKmRate: Money,
+    val perMinuteRate: Money, // Crucial for dense urban traffic
+    val minimumFare: Money,
+    val cancellationFee: Money,
+    
     val surgePricingEnabled: Boolean = true,
-    val peakHourMultiplier: Float = 1.5f,
-    val timeZone: String = "Asia/Kolkata"
+    val peakHourMultiplier: BigDecimal = BigDecimal("1.5"),
+    val pricingTimeZone: ZoneId = ZoneId.of("Asia/Kolkata")
 )
 
+// ============================================================================
+// Pricing Requests & Responses
+// ============================================================================
+
+/**
+ * The domain request sent to the pricing engine.
+ */
 data class PricingRequest(
     val vehicleId: String,
-    val pickupLat: Double,
-    val pickupLng: Double,
-    val dropoffLat: Double,
-    val dropoffLng: Double,
-    val distanceKm: Double,
-    val durationMinutes: Int,
+    val pickupLocation: GeoCoordinate,
+    val dropoffLocation: GeoCoordinate,
+    
+    val estimatedDistanceKm: Double,
+    val estimatedDuration: Duration, // Modern Kotlin Duration
+    
     val isScheduled: Boolean = false,
-    val scheduledTime: Long? = null,
+    val scheduledTime: Instant? = null,
+    
+    val promoCode: String? = null, // Future-proofing for discounts
     val userRole: UserRole
 )
 
-data class DynamicFareResponse(
-    val orderId: String = "",
-    val vehicleId: String,
-    val grossFare: Double,
-    val payableFare: Double,
-    val breakdown: FareBreakdown,
-    val surgeInfo: SurgeInfo,
-    val estimatedDurationMinutes: Int,
-    val validForSeconds: Int = 300
-)
-
+/**
+ * Information regarding active surge pricing to display to the user.
+ */
 data class SurgeInfo(
     val isSurgeActive: Boolean,
-    val multiplier: Float,
-    val reason: String = "",
-    val supplyLevel: String = "NORMAL",
-    val demandLevel: String = "NORMAL"
+    val multiplier: BigDecimal,
+    val reasonText: String? = null, // e.g., "High demand in your area"
+    val supplyLevel: SupplyLevel = SupplyLevel.NORMAL,
+    val demandLevel: DemandLevel = DemandLevel.NORMAL
 )
+
+/**
+ * The calculated fare response, returned to the UI for user approval.
+ */
+data class DynamicFareResponse(
+    val quoteId: String, // Unique ID for this specific fare calculation
+    val vehicleId: String,
+    
+    val grossFare: Money,
+    val finalPayableFare: Money,
+    val breakdown: FareBreakdown,
+    
+    val surgeInfo: SurgeInfo,
+    val estimatedDuration: Duration,
+    
+    // The time window this exact price is guaranteed for
+    val quoteValidFor: Duration,
+    val expiresAt: Instant,
+    
+    // Security: Encrypted token containing the fare data.
+    // The client sends this back when confirming the order to prevent tampering.
+    val pricingToken: String 
+) {
+    val isExpired: Boolean
+        get() = Instant.now().isAfter(expiresAt)
+}

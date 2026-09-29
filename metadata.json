@@ -1,8 +1,6 @@
 {
-  "name": "Remix Akhil Logistics",
-  "description": "Intra-city logistics and freight platform for on-demand goods transport, live fleet tracking, and driver management.",
+  "name": "Zaldi Logistics",
+  "description": "On-demand hyper-local logistics and delivery platform connecting customers, drivers, and fleet operations with real-time GPS tracking and fare estimation.",
   "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

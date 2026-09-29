@@ -12,16 +12,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val LightColorScheme = lightColorScheme(
-    primary = AmberPrimary,
+    primary = AccentBlue,               // Blue for main buttons
     onPrimary = Color.White,
-    primaryContainer = AmberContainer,
-    onPrimaryContainer = OnAmberContainer,
-    secondary = LogisticsBlue,
+    primaryContainer = AccentBlueContainer,
+    onPrimaryContainer = OnAccentBlueContainer,
+    
+    secondary = BrandSlate,             // Slate for secondary elements/headers
     onSecondary = Color.White,
-    secondaryContainer = LogisticsBlueContainer,
-    onSecondaryContainer = OnLogisticsBlueContainer,
-    tertiary = AmberPrimaryDark,
+    secondaryContainer = SurfaceTertiary,
+    onSecondaryContainer = TextDark,
+    
+    tertiary = BrandSlateDark,
     onTertiary = Color.White,
+    
     background = SurfaceLight,
     onBackground = TextDark,
     surface = SurfaceCard,
@@ -29,6 +32,7 @@ private val LightColorScheme = lightColorScheme(
     surfaceVariant = SurfaceTertiary,
     onSurfaceVariant = TextMuted,
     outline = BorderLight,
+    
     error = ErrorRed,
     onError = Color.White,
     errorContainer = ErrorContainer,
@@ -36,29 +40,32 @@ private val LightColorScheme = lightColorScheme(
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = AmberPrimary,
+    primary = Color(0xFF3B82F6),        // Lighter blue for dark mode
     onPrimary = Color.White,
-    primaryContainer = AmberPrimaryDark,
-    onPrimaryContainer = Color.White,
-    secondary = LogisticsBlue,
-    onSecondary = Color.White,
-    secondaryContainer = OnLogisticsBlueContainer,
-    onSecondaryContainer = LogisticsBlueContainer,
-    background = SurfaceInverse,
-    onBackground = Color(0xFFF9F9FB),
-    surface = Color(0xFF1E2024),
-    onSurface = Color(0xFFF9F9FB),
-    surfaceVariant = Color(0xFF282A30),
-    onSurfaceVariant = Color(0xFFB0B4C0),
-    outline = Color(0xFF383A42),
-    error = ErrorRed,
+    primaryContainer = Color(0xFF1E3A8A),
+    onPrimaryContainer = Color(0xFFDBEAFE),
+    
+    secondary = Color(0xFF94A3B8),
+    onSecondary = Color(0xFF0F172A),
+    secondaryContainer = Color(0xFF334155),
+    onSecondaryContainer = Color(0xFFF8FAFC),
+    
+    background = Color(0xFF0B0F19),     // Deep dark background
+    onBackground = Color(0xFFF8FAFC),
+    surface = Color(0xFF151E2E),        // Slightly elevated dark surface
+    onSurface = Color(0xFFF8FAFC),
+    surfaceVariant = Color(0xFF1E293B),
+    onSurfaceVariant = Color(0xFF94A3B8),
+    outline = Color(0xFF334155),
+    
+    error = Color(0xFFEF4444),
     onError = Color.White
 )
 
 @Composable
 fun MyApplicationTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // Keep brand aesthetic cohesive
+    dynamicColor: Boolean = false, // Keep false to maintain corporate identity
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {

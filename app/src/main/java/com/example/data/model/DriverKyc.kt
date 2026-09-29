@@ -1,10 +1,3 @@
-Here is the modernized, production-ready version of your DriverKyc data class.
-I have applied similar modern Android architecture practices as before, plus a crucial security consideration for local databases:
- * Type-Safe Enums: Replaced the raw strings for status and availabilityStatus with Kotlin Enums (KycStatus and DriverAvailability). This prevents invalid states from being saved to the database. Room natively handles saving enums as strings or integers.
- * Explicit SQL Naming: Added @ColumnInfo(name = "snake_case") to all properties. This decouples your Kotlin variable names from your database schema, making future refactoring safe and preventing migration crashes.
- * Removed Hardcoded Mocks: Default values like "Indiranagar, Bengaluru", 142 trips, and 4.85 rating have been replaced with proper logical defaults (null, 0, 0.0).
- * Security Best Practice (PII): Added a note regarding the aadhaarNumber. In a production app, storing sensitive, highly-regulated government IDs in plain text inside a local SQLite (Room) database is a security risk. You should typically encrypt these fields using EncryptedSharedPreferences or SQLCipher if local caching is strictly necessary.
-Modernized DriverKyc.kt
 package com.example.data.model
 
 import androidx.room.ColumnInfo
@@ -89,4 +82,3 @@ data class DriverKyc(
     @ColumnInfo(name = "current_area")
     val currentArea: String? = null
 )
-
